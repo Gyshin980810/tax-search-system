@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "agents": {
+    "prd-writer": {
+      "model": "opus",
+      "description": "PRD 작성 — 논리·구조 능력 필요"
+    },
+    "security-auditor": {
+      "model": "opus",
+      "description": "보안 감사 — 전문성·정확도 필수"
+    },
+    "code-refactorer": {
+      "model": "opus",
+      "description": "코드 리팩토링 — 복잡한 로직 이해 필요"
+    },
+    "vibe-coding-coach": {
+      "model": "opus",
+      "description": "비전 기반 개발 — 창의성·협업 능력 필요"
+    },
+    "frontend-designer": {
+      "model": "sonnet",
+      "description": "UI/UX 설계 — 충분한 능력, 비용 효율"
+    },
+    "content-writer": {
+      "model": "sonnet",
+      "description": "콘텐츠 작성 — 일반 콘텐츠는 충분함"
+    },
+    "project-task-planner": {
+      "model": "sonnet",
+      "description": "태스크 계획 — 구조화된 목록 작성"
+    },
+    "tax-planner": {
+      "model": "claude-haiku-4-5-20251001",
+      "description": "단순 쿼리 변환 — 비용 최소화"
+    },
+    "tax-searcher": {
+      "model": "claude-haiku-4-5-20251001",
+      "description": "HTTP 검색 호출만 — 비용 최소화"
+    },
+    "tax-generator": {
+      "model": "claude-sonnet-4-6",
+      "description": "복잡한 세법 추론 — 충분한 능력"
+    },
+    "law-verifier": {
+      "model": "claude-opus-4-7",
+      "description": "환각 검증 critical — 정확도 최우선"
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/check-pii.js"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/run-verifier.js"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/check-time-reference.js"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/run-verifier.js --check-v5"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "Read(**/.env*)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(**/users/**)",
+      "Write(~/.ssh/**)",
+      "Write(~/.aws/**)",
+      "Bash(curl * | bash)",
+      "Bash(ssh *)",
+      "Bash(nc *)"
+    ]
+  }
+}

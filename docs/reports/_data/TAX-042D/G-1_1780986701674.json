@@ -1,0 +1,27 @@
+{
+  "caseId": "G-1",
+  "N": 1,
+  "records": [
+    {
+      "caseId": "G-1",
+      "question": "근로소득이 있는 거주자의 종합소득세 계산 시 본인 기본공제 금액은 얼마인가요?",
+      "iteration": 1,
+      "startedAt": "2026-06-09T06:31:35.782Z",
+      "elapsedMs": 5890,
+      "outcome": "PASS",
+      "citationCount": 1,
+      "verifyStatus": "PASS",
+      "v1": true,
+      "v2": true,
+      "v3": true,
+      "v4": true,
+      "v5": true,
+      "v6": true,
+      "verifyMarker": "VERIFIED",
+      "tierMatchGrade": "exact",
+      "v3LabelEnum": "pass",
+      "v3TierMapping": "pass",
+      "v3Deprecation": "pass"
+    }
+  ]
+}

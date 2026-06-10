@@ -1,0 +1,48 @@
+{
+  "caseId": "G-S-상증-01",
+  "N": 2,
+  "records": [
+    {
+      "caseId": "G-S-상증-01",
+      "question": "배우자 상속공제는 한도가 어떻게 되나요?",
+      "iteration": 1,
+      "startedAt": "2026-06-09T06:31:34.150Z",
+      "elapsedMs": 6723,
+      "outcome": "PASS",
+      "citationCount": 1,
+      "verifyStatus": "PASS",
+      "v1": true,
+      "v2": true,
+      "v3": true,
+      "v4": true,
+      "v5": true,
+      "v6": true,
+      "verifyMarker": "VERIFIED",
+      "tierMatchGrade": "exact",
+      "v3LabelEnum": "pass",
+      "v3TierMapping": "pass",
+      "v3Deprecation": "pass"
+    },
+    {
+      "caseId": "G-S-상증-01",
+      "question": "배우자 상속공제는 한도가 어떻게 되나요?",
+      "iteration": 2,
+      "startedAt": "2026-06-09T06:31:40.874Z",
+      "elapsedMs": 4094,
+      "outcome": "PASS",
+      "citationCount": 1,
+      "verifyStatus": "PASS",
+      "v1": true,
+      "v2": true,
+      "v3": true,
+      "v4": true,
+      "v5": true,
+      "v6": true,
+      "verifyMarker": "VERIFIED",
+      "tierMatchGrade": "exact",
+      "v3LabelEnum": "pass",
+      "v3TierMapping": "pass",
+      "v3Deprecation": "pass"
+    }
+  ]
+}

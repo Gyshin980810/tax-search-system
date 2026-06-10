@@ -1,0 +1,27 @@
+{
+  "caseId": "G-S-법인-01",
+  "N": 1,
+  "records": [
+    {
+      "caseId": "G-S-법인-01",
+      "question": "법인세 과세표준 구간별 세율은 어떻게 되나요?",
+      "iteration": 1,
+      "startedAt": "2026-06-09T06:31:37.280Z",
+      "elapsedMs": 8545,
+      "outcome": "PASS",
+      "citationCount": 1,
+      "verifyStatus": "PASS",
+      "v1": true,
+      "v2": true,
+      "v3": true,
+      "v4": true,
+      "v5": true,
+      "v6": true,
+      "verifyMarker": "VERIFIED",
+      "tierMatchGrade": "exact",
+      "v3LabelEnum": "pass",
+      "v3TierMapping": "pass",
+      "v3Deprecation": "pass"
+    }
+  ]
+}

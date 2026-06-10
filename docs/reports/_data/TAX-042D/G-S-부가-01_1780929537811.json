@@ -1,0 +1,27 @@
+{
+  "caseId": "G-S-부가-01",
+  "N": 1,
+  "records": [
+    {
+      "caseId": "G-S-부가-01",
+      "question": "면세 대상이 되는 재화 또는 용역의 공급에는 어떤 것들이 있나요?",
+      "iteration": 1,
+      "startedAt": "2026-06-08T14:38:40.972Z",
+      "elapsedMs": 16836,
+      "outcome": "PASS",
+      "citationCount": 5,
+      "verifyStatus": "PASS",
+      "v1": true,
+      "v2": true,
+      "v3": true,
+      "v4": true,
+      "v5": true,
+      "v6": true,
+      "verifyMarker": "VERIFIED",
+      "tierMatchGrade": "exact",
+      "v3LabelEnum": "pass",
+      "v3TierMapping": "pass",
+      "v3Deprecation": "pass"
+    }
+  ]
+}

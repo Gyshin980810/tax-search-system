@@ -1,0 +1,270 @@
+{
+  "_guide": "회계사용 골든셋 시드 입력 양식 (TAX-028). 아래 seeds는 AI가 만든 '참고용 초안'입니다 — question·조문 매칭의 정답성은 회계사가 검수·확정해야 합니다. 필요한 입력은 5개: question·lawName·articleNumber·expectedLabel·expectedStatus. 원문 content·excerpt·면책은 `npm run golden:build`가 자동으로 채웁니다. 단 summary(정답 답변)는 스크립트가 채우지 않으므로 draft에서 회계사가 직접 작성합니다.",
+  "_workflow": "1) (검수) 아래 시드의 질문·법령명·조문번호가 맞는지 확인·수정 → 2) npm run golden:build (→ golden_direct.draft.json) → 3) draft에서 summary 작성·excerpt 좁히기·content 보강·expectedStatus 확정 → 4) golden_direct.json에 머지 → 5) npm run golden:status → 6) npx vitest run tests/golden/run_golden.test.ts",
+  "_caution": "AI 초안 주의: 조문번호는 법 개정으로 바뀌었을 수 있습니다. golden:build 실행 시 조문을 못 찾으면 해당 시드는 [SKIP]되니, SKIP된 것만 law.go.kr에서 정확한 조문번호로 고치세요. 또한 'question에 이 조문이 직접근거'라는 판단 자체가 세법 정답이므로 반드시 회계사가 확정합니다.",
+  "targetCount": 30,
+  "composition": { "pass": 24, "negative": 6 },
+  "_compositionNote": "회계사 결정(2026-05-23): PASS 24 + 네거티브 6. 현재 golden_direct.json에 PASS 6건·네거티브 4건(G-N1~N4) 확정. 아래 시드 18건(PASS) + 기존 6건 = PASS 24. 네거티브 추가 2건은 원문 조작이라 자동화 대상이 아니며 GOLDEN_SET_GUIDE.md §5-1을 보고 수기 작성합니다. 폐지·개정(⚫) 케이스도 현행 API로 자동 매칭이 어려워 수기 작성을 권장합니다.",
+  "seeds": [
+    {
+      "id": "G-S-소득-01",
+      "category": "소득세",
+      "question": "종합소득 과세표준에 적용되는 기본세율 구간은 어떻게 되나요?",
+      "lawName": "소득세법",
+      "articleNumber": "제55조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 종합소득 기본세율(제55조). summary에 구간·세율 정리, excerpt는 세율표 핵심부로 좁히기."
+    },
+    {
+      "id": "G-S-소득-02",
+      "category": "소득세",
+      "question": "근로소득이 있는 거주자의 자녀세액공제는 어떻게 적용되나요?",
+      "lawName": "소득세법",
+      "articleNumber": "제59조의2",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 자녀세액공제(제59조의2). 공제 대상·금액 확인."
+    },
+    {
+      "id": "G-S-소득-03",
+      "category": "소득세",
+      "question": "종합소득세 확정신고는 언제까지 해야 하나요?",
+      "lawName": "소득세법",
+      "articleNumber": "제70조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 종합소득과세표준 확정신고 기한(제70조)."
+    },
+    {
+      "id": "G-S-법인-01",
+      "category": "법인세",
+      "question": "법인세 과세표준 구간별 세율은 어떻게 되나요?",
+      "lawName": "법인세법",
+      "articleNumber": "제55조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 법인세 세율(제55조). 과세표준 구간·세율 확인."
+    },
+    {
+      "id": "G-S-법인-02",
+      "category": "법인세",
+      "question": "감가상각비는 어떤 기준으로 손금에 산입되나요?",
+      "lawName": "법인세법",
+      "articleNumber": "제23조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 감가상각비의 손금불산입(제23조). 상각범위액 한도 개념 확인."
+    },
+    {
+      "id": "G-S-법인-03",
+      "category": "법인세",
+      "question": "법인세 과세표준과 세액의 신고 기한은 언제인가요?",
+      "lawName": "법인세법",
+      "articleNumber": "제60조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 과세표준 등의 신고(제60조). 사업연도 종료 후 신고기한."
+    },
+    {
+      "id": "G-S-부가-01",
+      "category": "부가가치세",
+      "question": "면세 대상이 되는 재화 또는 용역의 공급에는 어떤 것들이 있나요?",
+      "lawName": "부가가치세법",
+      "articleNumber": "제26조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 면세(제26조). 항·호가 많아 content 보강 가능성, excerpt 좁히기 필요."
+    },
+    {
+      "id": "G-S-부가-02",
+      "category": "부가가치세",
+      "question": "재화의 수출에 대한 영세율은 어떻게 적용되나요?",
+      "lawName": "부가가치세법",
+      "articleNumber": "제21조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 영세율-재화의 수출(제21조)."
+    },
+    {
+      "id": "G-S-부가-03",
+      "category": "부가가치세",
+      "question": "부가가치세 확정신고와 납부는 언제까지 해야 하나요?",
+      "lawName": "부가가치세법",
+      "articleNumber": "제49조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 확정신고와 납부(제49조). 과세기간별 신고기한."
+    },
+    {
+      "id": "G-S-양도-01",
+      "category": "양도소득세",
+      "question": "양도소득세 과세 대상이 되는 자산의 범위는 어떻게 되나요?",
+      "lawName": "소득세법",
+      "articleNumber": "제94조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 양도소득의 범위(제94조). 양도세 카테고리지만 lawName은 소득세법."
+    },
+    {
+      "id": "G-S-양도-02",
+      "category": "양도소득세",
+      "question": "양도소득금액은 어떻게 계산하나요?",
+      "lawName": "소득세법",
+      "articleNumber": "제95조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 양도소득금액(제95조). 양도차익·장기보유특별공제 개념 확인."
+    },
+    {
+      "id": "G-S-양도-03",
+      "category": "양도소득세",
+      "question": "양도소득세의 세율은 어떻게 되나요?",
+      "lawName": "소득세법",
+      "articleNumber": "제104조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 양도소득세의 세율(제104조). 자산·보유기간별 세율 확인."
+    },
+    {
+      "id": "G-S-상증-01",
+      "category": "상속증여세",
+      "question": "배우자 상속공제는 한도가 어떻게 되나요?",
+      "lawName": "상속세 및 증여세법",
+      "articleNumber": "제19조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 배우자 상속공제(제19조). 한도 산식 확인."
+    },
+    {
+      "id": "G-S-상증-02",
+      "category": "상속증여세",
+      "question": "증여재산공제는 관계별로 얼마까지 인정되나요?",
+      "lawName": "상속세 및 증여세법",
+      "articleNumber": "제53조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 증여재산 공제(제53조). 배우자·직계존비속 등 관계별 공제액."
+    },
+    {
+      "id": "G-S-종부-01",
+      "category": "종합부동산세",
+      "question": "주택분 종합부동산세의 과세표준은 어떻게 산정하나요?",
+      "lawName": "종합부동산세법",
+      "articleNumber": "제8조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 과세표준-주택(제8조). 공시가격 합계·공정시장가액비율 확인."
+    },
+    {
+      "id": "G-S-종부-02",
+      "category": "종합부동산세",
+      "question": "주택분 종합부동산세의 세율은 어떻게 되나요?",
+      "lawName": "종합부동산세법",
+      "articleNumber": "제9조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 세율 및 세액-주택(제9조)."
+    },
+    {
+      "id": "G-S-지방-01",
+      "category": "지방세",
+      "question": "부동산 취득에 대한 취득세율은 어떻게 되나요?",
+      "lawName": "지방세법",
+      "articleNumber": "제11조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 부동산 취득의 세율(제11조). 유상·무상·원시취득 구분."
+    },
+    {
+      "id": "G-S-지방-02",
+      "category": "지방세",
+      "question": "재산세의 세율은 어떻게 되나요?",
+      "lawName": "지방세법",
+      "articleNumber": "제111조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[AI초안·검수필요] 재산세 세율(제111조). 기존 G-5(제115조 납기)와 다른 조문."
+    },
+    {
+      "id": "G-S-소득-04",
+      "category": "소득세",
+      "question": "근로소득에 포함되는 범위는 어떻게 되나요?",
+      "lawName": "소득세법",
+      "articleNumber": "제20조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[TAX-036·회계사채택 2026-05-31] 근로소득의 범위(제20조). 봉급·상여·인정상여 등 7개 호. 2024.12.31 개정."
+    },
+    {
+      "id": "G-S-양도-04",
+      "category": "양도소득세",
+      "question": "일시적 2주택의 경우 종전주택 양도 비과세 요건은 어떻게 되나요?",
+      "lawName": "소득세법 시행령",
+      "articleNumber": "제155조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[TAX-036·회계사채택 2026-05-31] 1세대1주택 특례(시행령 제155조). 본문 13,941자 — excerpt를 항·호 단위로 좁히기 필수. 시행 2026-07-01 최신."
+    },
+    {
+      "id": "G-S-법인-05",
+      "category": "법인세",
+      "question": "기업업무추진비(구 접대비) 한도 초과 시 손금불산입 기준은 어떻게 되나요?",
+      "lawName": "법인세법",
+      "articleNumber": "제25조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[TAX-036·회계사채택 2026-05-31] 기업업무추진비의 손금불산입(제25조). 2022년 '접대비' → '기업업무추진비' 개칭. 비법령 G-NL-03(접대비 심판례)과 짝."
+    },
+    {
+      "id": "G-S-법인-06",
+      "category": "법인세",
+      "question": "법인세법 시행령상 손비로 명시된 구체적 항목은 무엇인가요?",
+      "lawName": "법인세법 시행령",
+      "articleNumber": "제19조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[TAX-036·회계사채택 2026-05-31] 손비의 범위 상세(시행령 제19조). 기존 G-3(법인세법 손금 범위 본조)와 짝 — G-2 패턴처럼 2개 조문 케이스 구성 가능."
+    },
+    {
+      "id": "G-S-부가-04",
+      "category": "부가가치세",
+      "question": "공제 가능한 매입세액의 일반 요건은 무엇인가요?",
+      "lawName": "부가가치세법",
+      "articleNumber": "제38조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[TAX-036·회계사채택 2026-05-31] 공제하는 매입세액(제38조). G-S-부가-05(제39조 불공제)와 짝."
+    },
+    {
+      "id": "G-S-부가-05",
+      "category": "부가가치세",
+      "question": "매입세액 불공제 사유는 어떤 경우가 있나요?",
+      "lawName": "부가가치세법",
+      "articleNumber": "제39조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[TAX-036·회계사채택 2026-05-31] 공제하지 아니하는 매입세액(제39조). 9개 호 — excerpt 좁히기 필수."
+    },
+    {
+      "id": "G-S-상증-03",
+      "category": "상속증여세",
+      "question": "증여세 세율은 어떻게 적용되나요?",
+      "lawName": "상속세 및 증여세법",
+      "articleNumber": "제56조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[TAX-036·회계사채택 2026-05-31] 증여세 세율(제56조). ⚠️위임 조문(83자) — 상속세 세율 본조(제26조)와 묶어야 의미. 제26조는 별도 조회 필요."
+    },
+    {
+      "id": "G-S-지방-03",
+      "category": "지방세",
+      "question": "상속개시 1세대1주택 취득세 세율 특례는 어떻게 되나요?",
+      "lawName": "지방세법",
+      "articleNumber": "제15조",
+      "expectedLabel": "🟢직접근거",
+      "expectedStatus": "PASS",
+      "note": "[TAX-036·회계사채택 2026-05-31] 세율의 특례(제15조). 환매·상속·법인합병 등 중과기준세율 차감."
+    }
+  ]
+}

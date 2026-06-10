@@ -1,0 +1,312 @@
+{
+  "_guide": "비법령(심판례·해석례·판례·국세청해석) 골든셋 시드 — TAX-036 보강 (회계사채택 2026-05-31). caseNumber 기반 자동 빌더(buildNonlawCases.ts)가 NationalTaxLawAdapter.search()를 호출하여 본문을 그대로 가져옵니다. summary(정답 답변)는 회계사가 직접 작성합니다.",
+  "_workflow": "1) 시드 검수 → 2) npm run golden:build-nonlaw (→ golden_direct_nonlaw.draft.json) → 3) draft에서 summary 작성·excerpt 좁히기·라벨 확정 → 4) golden_direct.json에 머지 → 5) npm run golden:status",
+  "_caution": "비법령 라벨은 🟡유사사례(T3·T4) 또는 ⚪참고가 기본 — 사안이 다를 가능성 있으므로 단정 금지(V6). references 후보(본문 無)는 별도 처리.",
+  "_taxoss055": "TAX-055 골격 보조 — AI가 26건 추가(2026-06-10). question·searchKeyword·caseNumber는 laws_for_embed_nonlaw.json 89건 기반 제안. summary·expectedStatus는 회계사 직접 작성(자기참조 방지).",
+  "seeds": [
+    {
+      "id": "G-S-NL-01",
+      "category": "사전증여재산",
+      "question": "사전증여재산을 입증할 때 어떤 금융자료가 필요한가요?",
+      "searchKeyword": "사전증여재산",
+      "sourceType": "심판례",
+      "caseNumber": "조심2012서2999",
+      "expectedLabel": "🟡유사사례",
+      "expectedStatus": "PASS",
+      "note": "[TAX-036·v1 회계사 채택] 父의 토지양도대금 자금흐름 입증 미비로 기각. 사전증여재산 가산 적정."
+    },
+    {
+      "id": "G-S-NL-02",
+      "category": "특수관계자",
+      "question": "특수관계자로부터 비상장주식을 취득할 때 시가 평가 기준은 무엇인가요?",
+      "searchKeyword": "특수관계자",
+      "sourceType": "심판례",
+      "caseNumber": "조심2011서0181",
+      "expectedLabel": "🟡유사사례",
+      "expectedStatus": "PASS",
+      "note": "[TAX-036·v1 회계사 채택] 특수관계법인 비상장주식 매입가의 시가 평가 적정성 분쟁(부당행위계산부인)."
+    },
+    {
+      "id": "G-S-NL-03",
+      "category": "접대비",
+      "question": "해외파견 직원 인건비를 손금산입할 때 광고선전비와의 구분 기준은 무엇인가요?",
+      "searchKeyword": "접대비",
+      "sourceType": "심판례",
+      "caseNumber": "조심2012서2892",
+      "expectedLabel": "🟡유사사례",
+      "expectedStatus": "PASS",
+      "note": "[TAX-036·v1 회계사 채택] 2007~2009 사업연도 광고선전비·해외파견 인건비 손금산입 여부."
+    },
+    {
+      "id": "G-S-NL-04",
+      "category": "비사업용토지",
+      "question": "구 군용항공기지 기지보호구역 안의 임야는 비사업용 토지에 해당하나요?",
+      "searchKeyword": "비사업용 토지",
+      "sourceType": "해석례",
+      "caseNumber": "10-0412",
+      "expectedLabel": "🟡유사사례",
+      "expectedStatus": "PASS",
+      "note": "[TAX-036·v1 회계사 채택] 구 군용항공기지법 제5조 기지보호구역 임야의 비사업용 토지 해당 여부 판단기준."
+    },
+    {
+      "id": "G-S-NL-05",
+      "category": "소득세/1세대1주택",
+      "question": "동거가족이 보유한 무허가 건물 때문에 1세대 1주택 비과세가 배제된 경우 불복 가능성은 어떻게 검토하나요?",
+      "searchKeyword": "1세대 1주택 양도소득세 비과세",
+      "sourceType": "심판례",
+      "caseNumber": "조심 2019광1248",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안 수정] 동거가족(아들) 보유 무허가 건물로 1세대 1주택 비과세를 배제하여 양도소득세를 부과한 처분의 당부 (재조사)."
+    },
+    {
+      "id": "G-S-NL-06",
+      "category": "소득세/1세대1주택",
+      "question": "혼인으로 1세대 2주택이 된 비거주자가 주택을 양도할 때 양도소득세 비과세가 적용되나요?",
+      "searchKeyword": "1세대 1주택 양도소득세 비과세",
+      "sourceType": "해석례",
+      "caseNumber": "10-0413",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 소득세법 시행령 제155조 관련 비거주자 혼인 2주택 비과세 해석례."
+    },
+    {
+      "id": "G-S-NL-07",
+      "category": "소득세/양도필요경비",
+      "question": "건설자금이자는 양도소득세 계산 시 취득가액에 포함되어 필요경비로 공제받을 수 있나요?",
+      "searchKeyword": "양도소득 필요경비",
+      "sourceType": "심판례",
+      "caseNumber": "조심 2023서6895",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 건설자금이자를 소득세법상 양도자산 취득가액(필요경비)에 포함할 수 없다고 본 사례."
+    },
+    {
+      "id": "G-S-NL-08",
+      "category": "소득세/사업소득추계",
+      "question": "사업을 신규로 시작한 연도에도 수입금액에 따라 기준경비율이 적용되어 추계과세가 이루어지나요?",
+      "searchKeyword": "사업소득 추계과세",
+      "sourceType": "심판례",
+      "caseNumber": "조심 2018중4449",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 신규사업 개시연도에 기준경비율을 적용하여 추계경정한 처분의 당부."
+    },
+    {
+      "id": "G-S-NL-09",
+      "category": "소득세/부당행위계산",
+      "question": "특수관계자에게 채권을 저가로 양도한 행위가 부당행위계산부인 적용 대상에 해당하나요?",
+      "searchKeyword": "부당행위계산부인",
+      "sourceType": "심판례",
+      "caseNumber": "조심2014중3719",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안 수정] 쟁점채권 저가 양도 및 매도가능증권 대손상태 채권의 부당행위계산부인 대상 해당 여부."
+    },
+    {
+      "id": "G-S-NL-10",
+      "category": "법인세/접대비",
+      "question": "법인이 외주업체에 지급한 비용이 외형상 외주비이지만 실질적으로 접대 목적이라면 접대비로 손금불산입되나요?",
+      "searchKeyword": "접대비 손금불산입",
+      "sourceType": "심판례",
+      "caseNumber": "조심2013서0001",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 외주비 등을 접대비로 보아 손금불산입한 처분의 당부."
+    },
+    {
+      "id": "G-S-NL-11",
+      "category": "법인세/대손금",
+      "question": "결산조정 사항인 대손금을 세무신고 시 신고조정으로 손금산입할 수 있나요?",
+      "searchKeyword": "대손금 손금산입",
+      "sourceType": "심판례",
+      "caseNumber": "조심2011중1363",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 결산조정사항인 대손금을 신고조정으로 손금산입할 수 있는지 여부(기각)."
+    },
+    {
+      "id": "G-S-NL-12",
+      "category": "법인세/부당행위계산부인",
+      "question": "비영리법인의 수익사업 제외 임대료에 부당행위계산부인 인정이자를 과세할 수 있나요?",
+      "searchKeyword": "법인 부당행위계산부인",
+      "sourceType": "심판례",
+      "caseNumber": "국심2006구3652",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안 수정] 비영리법인의 수익사업 제외 장기미수임대료에 인정이자를 과세한 처분의 당부 (전부 취소)."
+    },
+    {
+      "id": "G-S-NL-13",
+      "category": "법인세/가지급금",
+      "question": "가지급금 인정이자 계산 시 당좌대출이자율을 선택한 경우 이후 사업연도에도 동일한 이율을 계속 적용해야 하나요?",
+      "searchKeyword": "가지급금 인정이자",
+      "sourceType": "심판례",
+      "caseNumber": "조심 2018구0098",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 가지급금 인정이자 당좌대출이자율 선택 후 연속 적용 의무 여부."
+    },
+    {
+      "id": "G-S-NL-14",
+      "category": "법인세/접대비(판례)",
+      "question": "법인이 임직원에게 제공한 서비스 할인혜택을 접대비로 보아 한도초과액을 손금불산입한 처분이 적법한가요?",
+      "searchKeyword": "접대비 손금불산입",
+      "sourceType": "판례",
+      "caseNumber": "2025두34772",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 직원 등에 제공한 할인혜택을 접대비로 보아 손금불산입한 처분(대법원 2025두34772)."
+    },
+    {
+      "id": "G-S-NL-15",
+      "category": "부가세/매입세액불공제",
+      "question": "실물거래 없는 가공세금계산서로 확인된 매입세액을 불공제한 처분이 적법한가요?",
+      "searchKeyword": "매입세액 불공제",
+      "sourceType": "심판례",
+      "caseNumber": "국심2006서3339",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안 수정] 실물거래 없는 가공세금계산서(유흥주점 주류) 매입세액을 불공제한 처분의 당부 (기각)."
+    },
+    {
+      "id": "G-S-NL-16",
+      "category": "부가세/세금계산서부실기재",
+      "question": "거래처가 사실과 다른 세금계산서를 발급한 경우 세금계산서부실기재가산세가 부과되나요?",
+      "searchKeyword": "세금계산서 부실기재",
+      "sourceType": "심판례",
+      "caseNumber": "조심 2017서1447",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 사실과 다른 세금계산서로 보아 세금계산서부실기재가산세를 부과한 처분의 당부."
+    },
+    {
+      "id": "G-S-NL-17",
+      "category": "부가세/면세전용",
+      "question": "부가세를 환급받은 사업용 오피스텔을 주거용으로 전용하면 납부 의무가 생기나요?",
+      "searchKeyword": "면세 전용 부가가치세",
+      "sourceType": "심판례",
+      "caseNumber": "조심2014부1137",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 부가가치세를 환급받은 오피스텔을 주거용(면세)으로 전용한 것으로 보아 과세한 처분의 당부."
+    },
+    {
+      "id": "G-S-NL-18",
+      "category": "부가세/대손세액공제",
+      "question": "중소기업의 외상매출금 중 회수기일이 2년 이상 경과한 경우 대손세액공제가 적용되나요?",
+      "searchKeyword": "대손세액공제",
+      "sourceType": "심판례",
+      "caseNumber": "조심 2022서7020",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 2020년 이전 회수기일 2년 이상 경과 중소기업 외상매출금의 대손세액공제 적용 가능 여부."
+    },
+    {
+      "id": "G-S-NL-19",
+      "category": "부가세/대손세액공제(판례)",
+      "question": "채무자가 파산선고를 받아 회수할 수 없는 채권에 대해 대손세액공제를 신청할 수 있나요?",
+      "searchKeyword": "대손세액공제",
+      "sourceType": "판례",
+      "caseNumber": "2024두60435",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 채무자 파산으로 회수할 수 없는 채권에 대한 대손세액공제(대법원 2024두60435)."
+    },
+    {
+      "id": "G-S-NL-20",
+      "category": "상속증여세/비상장주식평가(판례)",
+      "question": "특수관계인에게 비상장법인 자기주식을 저가 양도할 때 시가를 상속세 및 증여세법상 보충적 평가방법으로 산정할 수 있나요?",
+      "searchKeyword": "비상장주식 평가",
+      "sourceType": "판례",
+      "caseNumber": "2025두33647",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안 수정] 비상장법인 자기주식 저가양도 시가 산정에 보충적 평가방법 적용 여부(대법원 2025두33647)."
+    },
+    {
+      "id": "G-S-NL-21",
+      "category": "상속증여세/명의신탁증여의제",
+      "question": "명의신탁한 주식을 3개월 이내에 실명으로 반환한 경우에도 증여의제 과세가 적용되나요?",
+      "searchKeyword": "명의신탁 증여의제",
+      "sourceType": "심판례",
+      "caseNumber": "조심 2021서2370",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 명의신탁 주식을 3개월 이내 반환한 경우 증여의제 과세 배제 주장의 당부."
+    },
+    {
+      "id": "G-S-NL-22",
+      "category": "상속증여세/가업상속공제",
+      "question": "가업상속공제를 받은 후 사후관리기간 중 균등유상감자를 하면 지분 감소로 추징사유에 해당하나요?",
+      "searchKeyword": "가업상속공제",
+      "sourceType": "심판례",
+      "caseNumber": "조심 2023서10708",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 가업상속공제 후 균등유상감자 시 지분 감소 추징사유 해당 여부."
+    },
+    {
+      "id": "G-S-NL-23",
+      "category": "상속증여세/가업상속공제",
+      "question": "사업자등록일 기준 가업 영위기간이 10년 미만이면 가업상속공제를 받을 수 없나요?",
+      "searchKeyword": "가업상속공제",
+      "sourceType": "심판례",
+      "caseNumber": "조심 2019구0590",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안 수정] 가업 영위기간 10년 충족 여부(사업자등록일 vs 실질 개시)에 따른 가업상속공제 부인 처분의 당부 (인용)."
+    },
+    {
+      "id": "G-S-NL-24",
+      "category": "종합부동산세/합산배제",
+      "question": "매입임대주택으로 등록했으나 실제로는 건설임대주택인 경우 종합부동산세 합산배제를 받을 수 있나요?",
+      "searchKeyword": "종합부동산세 합산배제",
+      "sourceType": "심판례",
+      "caseNumber": "조심 2022서2330",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안 수정] 매입임대→건설임대주택 잘못 신고로 합산배제된 경우 정정 가능 여부. ※종부세1세대1주택판정 키워드는 DRY-RUN에서 API 0건 확인."
+    },
+    {
+      "id": "G-S-NL-25",
+      "category": "종합부동산세/합산배제",
+      "question": "부동산신탁회사가 신탁받아 소유 중인 미분양주택이 종합부동산세 합산배제 대상인가요?",
+      "searchKeyword": "종합부동산세 합산배제",
+      "sourceType": "심판례",
+      "caseNumber": "조심 2021서1889",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 신탁회사 보유 미분양주택이 종합부동산세 과세표준 합산배제 대상인지 여부."
+    },
+    {
+      "id": "G-S-NL-26",
+      "category": "종합부동산세/합산배제",
+      "question": "과세기준일 현재 임대사업자 등록이 되어 있지 않은 임대주택도 종합부동산세 합산배제가 가능한가요?",
+      "searchKeyword": "종합부동산세 합산배제",
+      "sourceType": "심판례",
+      "caseNumber": "조심 2016부3139",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 과세기준일 당시 임대사업자 미등록 임대주택에 대한 합산배제 가능 여부."
+    },
+    {
+      "id": "G-S-NL-27",
+      "category": "종합부동산세/합산배제",
+      "question": "공공건설임대주택의 부속토지만 소유한 경우에도 종합부동산세 합산배제 규정이 적용되나요?",
+      "searchKeyword": "종합부동산세 합산배제",
+      "sourceType": "심판례",
+      "caseNumber": "조심 2021서4789",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 행복주택(공공건설임대) 부속토지만 소유 시 합산배제 적용 여부."
+    },
+    {
+      "id": "G-S-NL-28",
+      "category": "종합부동산세/세부담상한",
+      "question": "미분양주택이 합산배제에서 과세대상으로 포함되는 경우 세부담상한 계산 기준은 어떻게 되나요?",
+      "searchKeyword": "종합부동산세 세부담 상한",
+      "sourceType": "심판례",
+      "caseNumber": "조심 2019서2461",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 합산배제 대상에서 과세대상으로 전환 시 세부담상한 산정 방식 분쟁."
+    },
+    {
+      "id": "G-S-NL-29",
+      "category": "종합부동산세/세부담상한",
+      "question": "1주택자에 대한 종합부동산세 세율 및 세부담상한을 낮추어 적용해야 한다는 주장이 법적으로 인정되나요?",
+      "searchKeyword": "종합부동산세 세부담 상한",
+      "sourceType": "심판례",
+      "caseNumber": "조심 2021서1865",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 1주택자 세율·장기보유 세액공제·세부담상한 적용 주장의 당부."
+    },
+    {
+      "id": "G-S-NL-30",
+      "category": "종합부동산세/세부담상한",
+      "question": "종합부동산세 세부담상한액 산정 시 기준이 되는 직전 연도 세액 계산 방법은 무엇인가요?",
+      "searchKeyword": "종합부동산세 세부담 상한",
+      "sourceType": "심판례",
+      "caseNumber": "국심2007중2173",
+      "expectedLabel": "🟡유사사례",
+      "note": "[TAX-055 AI 제안] 세부담상한액 산정 시 직전연도 기준 과세표준·세액 계산 방법."
+    }
+  ]
+}

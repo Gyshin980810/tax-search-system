@@ -1,0 +1,1054 @@
+{
+  "ticket": "TAX-029",
+  "measuredAt": "2026-06-10T09:12:07.605Z",
+  "label": "diagnose",
+  "config": {
+    "nIterations": 40,
+    "p95ThresholdMs": 15000,
+    "goldenSetSize": 40,
+    "mode": "real-api",
+    "caseDistribution": "golden-weighted-cyclic",
+    "model": "gpt-4o-mini"
+  },
+  "summary": {
+    "stages": {
+      "rewrite": {
+        "n": 40,
+        "mean": 1869.6876025000001,
+        "stdev": 692.3745941663847,
+        "p50": 1590.3353000000352,
+        "p95": 3439.548699999985,
+        "p99": 4038.5188999999664,
+        "max": 4038.5188999999664
+      },
+      "search": {
+        "n": 40,
+        "mean": 1482.7937625000009,
+        "stdev": 932.6343359956333,
+        "p50": 1640.0225999999966,
+        "p95": 2807.5239,
+        "p99": 4657.005000000005,
+        "max": 4657.005000000005
+      },
+      "answer": {
+        "n": 40,
+        "mean": 5503.186574999998,
+        "stdev": 4216.821608715783,
+        "p50": 3964.16320000001,
+        "p95": 13511.592700000008,
+        "p99": 23080.639999999985,
+        "max": 23080.639999999985
+      },
+      "verify": {
+        "n": 40,
+        "mean": 0.07733499999669675,
+        "stdev": 0.056238392358262834,
+        "p50": 0.05760000000009313,
+        "p95": 0.20939999999973224,
+        "p99": 0.31529999999929714,
+        "max": 0.31529999999929714
+      }
+    },
+    "total": {
+      "n": 40,
+      "mean": 8855.878869999999,
+      "stdev": 4103.49344216823,
+      "p50": 7999.433400000009,
+      "p95": 17310.598600000027,
+      "p99": 25519.585699999996,
+      "max": 25519.585699999996
+    },
+    "pass": false,
+    "okCount": 40,
+    "errorCount": 0,
+    "overallElapsedMs": 354242.60829999996,
+    "errorCodeCount": {}
+  },
+  "verification": {
+    "attempts": 40,
+    "pass": 40,
+    "checkFailCount": {
+      "v1": 0,
+      "v2": 0,
+      "v3": 0,
+      "v4": 0,
+      "v5": 0,
+      "v6": 0
+    },
+    "reasonCount": {}
+  },
+  "iterations": [
+    {
+      "iter": 1,
+      "caseId": "G-1",
+      "totalMs": 6358.2094,
+      "status": "ok"
+    },
+    {
+      "iter": 2,
+      "caseId": "G-2",
+      "totalMs": 6634.605999999999,
+      "status": "ok"
+    },
+    {
+      "iter": 3,
+      "caseId": "G-3",
+      "totalMs": 10395.309699999998,
+      "status": "ok"
+    },
+    {
+      "iter": 4,
+      "caseId": "G-4A",
+      "totalMs": 6841.273400000002,
+      "status": "ok"
+    },
+    {
+      "iter": 5,
+      "caseId": "G-4B",
+      "totalMs": 11168.157599999999,
+      "status": "ok"
+    },
+    {
+      "iter": 6,
+      "caseId": "G-5",
+      "totalMs": 7871.457800000004,
+      "status": "ok"
+    },
+    {
+      "iter": 7,
+      "caseId": "G-N1",
+      "totalMs": 3699.9082000000053,
+      "status": "ok"
+    },
+    {
+      "iter": 8,
+      "caseId": "G-N2",
+      "totalMs": 4877.7467999999935,
+      "status": "ok"
+    },
+    {
+      "iter": 9,
+      "caseId": "G-N3",
+      "totalMs": 4120.690200000005,
+      "status": "ok"
+    },
+    {
+      "iter": 10,
+      "caseId": "G-N4",
+      "totalMs": 4950.102100000004,
+      "status": "ok"
+    },
+    {
+      "iter": 11,
+      "caseId": "G-S-소득-04",
+      "totalMs": 8109.423299999995,
+      "status": "ok"
+    },
+    {
+      "iter": 12,
+      "caseId": "G-S-양도-04",
+      "totalMs": 6310.798699999999,
+      "status": "ok"
+    },
+    {
+      "iter": 13,
+      "caseId": "G-S-법인-05",
+      "totalMs": 7512.5818,
+      "status": "ok"
+    },
+    {
+      "iter": 14,
+      "caseId": "G-S-법인-06",
+      "totalMs": 4717.703899999993,
+      "status": "ok"
+    },
+    {
+      "iter": 15,
+      "caseId": "G-S-부가-04",
+      "totalMs": 13729.983999999997,
+      "status": "ok"
+    },
+    {
+      "iter": 16,
+      "caseId": "G-S-부가-05",
+      "totalMs": 7999.433400000009,
+      "status": "ok"
+    },
+    {
+      "iter": 17,
+      "caseId": "G-S-상증-03",
+      "totalMs": 6348.696299999996,
+      "status": "ok"
+    },
+    {
+      "iter": 18,
+      "caseId": "G-S-지방-03",
+      "totalMs": 8259.898099999991,
+      "status": "ok"
+    },
+    {
+      "iter": 19,
+      "caseId": "G-S-NL-01",
+      "totalMs": 17489.782699999996,
+      "status": "ok"
+    },
+    {
+      "iter": 20,
+      "caseId": "G-S-NL-02",
+      "totalMs": 11611.638400000025,
+      "status": "ok"
+    },
+    {
+      "iter": 21,
+      "caseId": "G-S-NL-03",
+      "totalMs": 9798.900199999975,
+      "status": "ok"
+    },
+    {
+      "iter": 22,
+      "caseId": "G-S-NL-04",
+      "totalMs": 8480.204899999982,
+      "status": "ok"
+    },
+    {
+      "iter": 23,
+      "caseId": "G-S-소득-01",
+      "totalMs": 10109.67379999999,
+      "status": "ok"
+    },
+    {
+      "iter": 24,
+      "caseId": "G-S-소득-02",
+      "totalMs": 8670.777999999991,
+      "status": "ok"
+    },
+    {
+      "iter": 25,
+      "caseId": "G-S-소득-03",
+      "totalMs": 5558.24040000001,
+      "status": "ok"
+    },
+    {
+      "iter": 26,
+      "caseId": "G-S-법인-01",
+      "totalMs": 9084.173699999985,
+      "status": "ok"
+    },
+    {
+      "iter": 27,
+      "caseId": "G-S-법인-02",
+      "totalMs": 7466.180099999998,
+      "status": "ok"
+    },
+    {
+      "iter": 28,
+      "caseId": "G-S-법인-03",
+      "totalMs": 6789.548700000014,
+      "status": "ok"
+    },
+    {
+      "iter": 29,
+      "caseId": "G-S-부가-01",
+      "totalMs": 25519.585699999996,
+      "status": "ok"
+    },
+    {
+      "iter": 30,
+      "caseId": "G-S-부가-02",
+      "totalMs": 9792.046399999992,
+      "status": "ok"
+    },
+    {
+      "iter": 31,
+      "caseId": "G-S-부가-03",
+      "totalMs": 9082.65949999998,
+      "status": "ok"
+    },
+    {
+      "iter": 32,
+      "caseId": "G-S-양도-01",
+      "totalMs": 7096.420199999993,
+      "status": "ok"
+    },
+    {
+      "iter": 33,
+      "caseId": "G-S-양도-02",
+      "totalMs": 10130.1348,
+      "status": "ok"
+    },
+    {
+      "iter": 34,
+      "caseId": "G-S-양도-03",
+      "totalMs": 8098.993499999982,
+      "status": "ok"
+    },
+    {
+      "iter": 35,
+      "caseId": "G-S-상증-01",
+      "totalMs": 5612.779000000039,
+      "status": "ok"
+    },
+    {
+      "iter": 36,
+      "caseId": "G-S-상증-02",
+      "totalMs": 5616.643599999952,
+      "status": "ok"
+    },
+    {
+      "iter": 37,
+      "caseId": "G-S-종부-01",
+      "totalMs": 17310.598600000027,
+      "status": "ok"
+    },
+    {
+      "iter": 38,
+      "caseId": "G-S-종부-02",
+      "totalMs": 11388.698600000003,
+      "status": "ok"
+    },
+    {
+      "iter": 39,
+      "caseId": "G-S-지방-01",
+      "totalMs": 6211.120900000038,
+      "status": "ok"
+    },
+    {
+      "iter": 40,
+      "caseId": "G-S-지방-02",
+      "totalMs": 13410.372399999993,
+      "status": "ok"
+    }
+  ],
+  "rawStages": {
+    "rewrite": [
+      2677.6354,
+      2099.5228000000006,
+      1655.818799999999,
+      1709.871500000001,
+      4020.4347000000016,
+      1332.0570999999982,
+      1449.3188999999984,
+      1937.3066000000035,
+      1695.1684999999998,
+      1859.659400000004,
+      2549.9272000000055,
+      1349.909599999999,
+      1839.1877999999997,
+      1325.7418000000034,
+      1348.3484000000026,
+      1529.1402999999991,
+      1458.5737999999983,
+      1609.934699999998,
+      1309.895000000004,
+      1489.4896000000008,
+      2188.1776000000245,
+      3179.1517000000167,
+      1399.6055000000051,
+      2049.456200000015,
+      1209.4739999999874,
+      1579.6972999999998,
+      1285.9298999999883,
+      1669.3579000000027,
+      1510.138500000001,
+      1528.9091999999946,
+      1867.304599999974,
+      1885.938199999975,
+      1508.7727000000305,
+      1590.3353000000352,
+      2159.9904000000097,
+      1561.3224000000046,
+      1329.615599999961,
+      4038.5188999999664,
+      1559.3176000000094,
+      3439.548699999985
+    ],
+    "search": [
+      1834.4138000000003,
+      1743.7639,
+      962.8891000000003,
+      1960.045900000001,
+      0.017400000004272442,
+      1668.9187999999995,
+      0.01570000000356231,
+      0.010999999998603016,
+      416.0758999999962,
+      0.01750000000174623,
+      2142.495200000005,
+      2046.6578000000009,
+      1640.0225999999966,
+      917.7108000000007,
+      849.5547999999981,
+      2807.5239,
+      3252.4916999999987,
+      797.2516000000032,
+      2668.0697999999975,
+      848.2388999999966,
+      857.8367000000144,
+      2285.570000000007,
+      746.527700000006,
+      1704.021299999993,
+      1940.5312000000267,
+      1810.6873999999953,
+      1088.5717000000004,
+      2039.5828000000038,
+      928.6553000000131,
+      1886.040399999998,
+      1908.064699999988,
+      1804.680800000031,
+      4657.005000000005,
+      786.4270999999717,
+      1557.3692000000156,
+      1785.4654999999912,
+      838.437099999981,
+      969.0840000000317,
+      2271.3055999999633,
+      889.7008999999962
+    ],
+    "answer": [
+      1845.0899,
+      2790.9873000000007,
+      7776.132,
+      3171.1899999999987,
+      7147.5817000000025,
+      4870.329899999997,
+      2250.4329,
+      2940.3006000000023,
+      2009.2188000000024,
+      3090.2234000000026,
+      3416.8364999999903,
+      2914.1082000000024,
+      4033.255400000009,
+      2473.91859999999,
+      11531.833400000003,
+      3662.6270000000077,
+      1637.4858999999997,
+      5852.579899999997,
+      13511.592700000008,
+      9273.682100000005,
+      6752.681699999986,
+      3015.357099999994,
+      7963.3946,
+      4917.170199999993,
+      2408.1119999999937,
+      5693.6348,
+      5091.501099999994,
+      3080.446200000006,
+      23080.639999999985,
+      6376.840599999996,
+      5307.039700000023,
+      3405.667699999991,
+      3964.16320000001,
+      5721.996000000043,
+      1895.2146999999532,
+      2269.6229000000167,
+      15142.31229999999,
+      6380.915500000003,
+      2380.3788999999524,
+      9080.967599999974
+    ],
+    "verify": [
+      0.31529999999929714,
+      0.16809999999895808,
+      0.20939999999973224,
+      0.07779999999911524,
+      0.03800000000046566,
+      0.07320000000618165,
+      0.06660000000556465,
+      0.05310000000463333,
+      0.07249999999476131,
+      0.06450000000768341,
+      0.06410000000323635,
+      0.04889999999431893,
+      0.04199999998672865,
+      0.22819999999774154,
+      0.046300000001792796,
+      0.05870000000868458,
+      0.046999999991385266,
+      0.044899999993504025,
+      0.05720000001019798,
+      0.05809999999473803,
+      0.06779999998980202,
+      0.04769999999552965,
+      0.05689999999594875,
+      0.04469999999855645,
+      0.043599999975413084,
+      0.05760000000009313,
+      0.0572999999858439,
+      0.053500000009080395,
+      0.04069999998318963,
+      0.07979999997769482,
+      0.11449999996693805,
+      0.042599999986123294,
+      0.061600000015459955,
+      0.08929999999236315,
+      0.08460000000195578,
+      0.10550000000512227,
+      0.060799999977461994,
+      0.05540000001201406,
+      0.0415999999968335,
+      0.05400000000372529
+    ]
+  },
+  "verifyLog": [
+    {
+      "iter": 1,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 2,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 3,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 4,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 5,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 6,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 7,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 8,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 9,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 10,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 11,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 12,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 13,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 14,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 15,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 16,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 17,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 18,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 19,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 20,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 21,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 22,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 23,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 24,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 25,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 26,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 27,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 28,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 29,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 30,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 31,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 32,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 33,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 34,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 35,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 36,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 37,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 38,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 39,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    },
+    {
+      "iter": 40,
+      "attempt": 1,
+      "status": "PASS",
+      "checks": {
+        "v1": true,
+        "v2": true,
+        "v3": true,
+        "v4": true,
+        "v5": true,
+        "v6": true
+      },
+      "failReasons": []
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+# 환경 변수 (API 키, 시크릿 포함 — 절대 커밋 금지)
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 로그 파일 (개인정보 포함 가능)
+logs/*.json
+logs/*.log
+
+# 빌드 결과물
+.next/
+out/
+dist/
+build/
+
+# 의존성
+node_modules/
+
+# OS 및 에디터
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# 로컬 Claude Code 설정 (개인 예외 규칙)
+.claude/settings.local.json
+
+# Next.js
+next-env.d.ts
+*.tsbuildinfo
+
+# 테스트 커버리지
+/coverage
+
+# Vercel
+.vercel
+
+# 인증서
+*.pem
+
+# 골든셋 작성 보조 — 자동 생성 초안(검수 전, 회귀 게이트 비대상) (TAX-028)
+eval/golden_direct.draft.json
+
+# 서드파티 MCP 도구 (로컬 복사본, 외부 의존성)
+mcp-shrimp-task-manager/
+claude-agents-main/
+
+# 테스트 결과물
+test-results/
+
+# 로컬 MCP 설정 (기기 종속 절대경로 포함)
+.mcp.json

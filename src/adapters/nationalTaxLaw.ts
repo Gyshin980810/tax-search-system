@@ -1,0 +1,974 @@
+import { config } from '../config'
+import type { ISearchPort } from '../ports/taxLawSearchPort'
+import type { IImpactMapPort, TribunalRelationsRaw } from '../ports/impactMapPort'
+import type { SearchQuery } from '../domain/SearchQuery'
+import type { SearchResult } from '../domain/SearchResult'
+import type { TaxLaw, TrustTier } from '../domain/TaxLaw'
+import { ApiTimeoutError, ApiUnavailableError } from '../domain/errors'
+import { normalizeLawName, selectBestLaw } from '../domain/lawAliases'
+import { normalizeNonLawQuery } from '../domain/nonLawQueryNormalize'
+
+// ─── 국세법령정보시스템 API 응답 타입 ──────────────────────────────────────
+
+interface RawLaw {
+  법령일련번호: string
+  법령명한글: string
+  법령약칭명: string
+  법령구분명: string
+  공포일자: string      // YYYYMMDD
+  시행일자: string      // YYYYMMDD
+  공포번호: string
+}
+
+interface RawLawSearch {
+  resultCode: string
+  totalCnt: string
+  law?: RawLaw | RawLaw[]
+}
+
+// 조문 본문 하위노드 — 항·호·목 (TAX-032, JO 진단으로 구조 확정 2026-05-24)
+//  ⚠️ 항내용/호내용/목내용은 번호(①·1.·가.)를 이미 포함한다(번호 prepend 금지 — 중복 방지).
+//  ⚠️ 항내용은 문자열 또는 (세율표 등) 중첩 배열로 온다 → NestedText로 표현.
+type NestedText = string | NestedText[]
+
+interface RawMok {
+  목번호?: string
+  목내용?: NestedText
+}
+
+interface RawHo {
+  호번호?: string
+  호내용?: NestedText
+  목?: RawMok | RawMok[]   // 단일/복수 혼재
+}
+
+interface RawHang {
+  항번호?: string
+  항내용?: NestedText      // 문자열 또는 중첩 배열(세율표)
+  호?: RawHo | RawHo[]     // 단일/복수 혼재
+}
+
+interface RawArticle {
+  조문번호: number
+  조문여부: string      // "조문" | "장" | "절" 등
+  조문시행일자: string  // YYYYMMDD
+  조문내용: string      // "제N조(제목)" — 제목 줄만. 본문은 항·호·목 하위노드에 있음
+  조문키: string
+  항?: RawHang | RawHang[]   // TAX-032: 조문 본문(항·호·목) — content 조립에 사용
+}
+
+interface RawLawService {
+  법령: {
+    기본정보: {
+      법령명_한글: string
+      법종구분: { content: string }
+      공포일자: string
+      시행일자: string
+      법령ID: string
+    }
+    조문?: { 조문단위: RawArticle | RawArticle[] }
+  }
+}
+
+// 판례 목록 조회(target=prec) 응답 — TAX-015 진단으로 확정 (2026-05-20)
+interface RawPrec {
+  사건번호: string
+  사건명: string
+  선고일자: string       // 목록은 "YYYY.MM.DD", 본문은 "YYYYMMDD"
+  법원명: string         // 국세 출처 목록은 빈 문자열인 경우 있음
+  데이터출처명: string   // "대법원" | "국세법령정보시스템" 등
+  판례일련번호: string
+  판례상세링크: string   // ⚠️ OC(API키) 포함 — 그대로 쓰지 말 것
+  사건종류명: string
+}
+
+interface RawPrecSearch {
+  resultCode?: string
+  prec?: RawPrec | RawPrec[]
+}
+
+// 판례 본문 조회(target=prec, ID) 응답 — 법원 출처에서만 제공
+interface RawPrecService {
+  판시사항?: string
+  판결요지?: string
+  참조판례?: string
+  법원명?: string
+  사건번호?: string
+  선고일자?: string
+  사건명?: string
+}
+
+// 법령해석례 목록 조회(target=expc) 응답 — TAX-016A 진단으로 확정 (2026-05-21)
+interface RawExpc {
+  안건명: string
+  안건번호: string         // 예: "12-0368" — V1 식별자
+  회신기관명: string       // 해석을 회신한 기관 (예: 법제처)
+  질의기관명: string       // 질의한 기관 (예: 기획재정부)
+  회신일자: string         // "YYYY.MM.DD"
+  법령해석례일련번호: string // 본문 조회 ID·원문 링크 seq
+  법령해석례상세링크: string // ⚠️ OC(API키) 포함 — 그대로 쓰지 말 것
+}
+
+interface RawExpcSearch {
+  resultCode?: string
+  expc?: RawExpc | RawExpc[]
+}
+
+// 법령해석례 본문 조회(target=expc, ID) 응답
+interface RawExpcService {
+  안건명?: string
+  안건번호?: string
+  해석기관명?: string
+  해석일자?: string
+  질의기관명?: string
+  질의요지?: string
+  회답?: string
+  이유?: string
+}
+
+// 국세청 법령해석 목록 조회(target=ntsCgmExpc) 응답 — TAX-016B 실호출로 확정 (2026-05-22)
+// ⚠️ 본문(전문) 미제공 — 목록만 제공. 발췌 인용 불가 → 참고 목록(references) 트랙(TAX-015B/D).
+interface RawNtsExpc {
+  id?: string | number
+  안건명: string
+  안건번호: string          // 예: "법인22601-2200" — V1 식별자
+  해석기관명: string        // "국세청"
+  해석기관코드?: string
+  질의기관명?: string
+  질의기관코드?: string
+  해석일자: string          // "YYYY.MM.DD"
+  법령해석일련번호: string | number
+  법령해석상세링크: string  // taxlaw.nts.go.kr 공개 뷰어 링크 (OC 키 미포함 — 실호출 확인)
+  데이터기준일시?: string
+}
+
+interface RawNtsExpcSearch {
+  resultCode?: string
+  totalCnt?: string
+  cgmExpc?: RawNtsExpc | RawNtsExpc[]
+}
+
+// 조세심판원 특별행정심판재결례 목록(target=ttSpecialDecc) — TAX-016C 실호출로 확정 (2026-05-22)
+// 래퍼는 일반 decc와 동일(`{Decc:{decc:[]}}`)이나 재결청='조세심판원'. 본문(SpecialDeccService) 제공.
+interface RawTtSpecialDecc {
+  id?: string | number
+  특별행정심판재결례일련번호: string | number  // 본문 조회 ID
+  사건명: string
+  청구번호: string                              // 예: "조심 2020부1558" — V1 식별자
+  처분일자?: string
+  의결일자: string                              // "YYYY.MM.DD"
+  처분청?: string
+  재결청: string                                // "조세심판원"
+  재결구분명?: string
+  재결구분코드?: string
+  행정심판재결례상세링크?: string               // ⚠️ OC(API키) 포함 — 그대로 쓰지 말 것
+  데이터기준일시?: string
+}
+
+interface RawTtSpecialDeccSearch {
+  resultCode?: string
+  totalCnt?: string
+  decc?: RawTtSpecialDecc | RawTtSpecialDecc[]
+}
+
+// 특별행정심판재결례 본문 조회(target=ttSpecialDecc, ID) 응답 — `{ SpecialDeccService: {} }`
+interface RawSpecialDeccService {
+  재결청?: string
+  사건명?: string
+  청구번호?: string
+  주문?: string
+  재결요지?: string
+  이유?: string
+  세목?: string
+  관련법령?: string
+  /**
+   * 참조결정 — 진단5(2026-05-24) 실호출로 확인된 필드.
+   * 형식: 단건("조심2011서1540") 또는 "/" 구분 복수("조심2013중3738 / 국심2004중3046").
+   * trailing " /" 있는 경우 있음 (parseReferences에서 정리).
+   */
+  참조결정?: string
+  의결일자?: string
+  특별행정심판재결례일련번호?: string | number
+}
+
+// ─── 캐시 (TTL 24시간, 최대 500개 LRU — SSOT §7.3) ──────────────────────
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000
+const CACHE_EMPTY_TTL_MS = 5 * 60 * 1000   // 빈 결과는 5분만 보관
+const CACHE_MAX_ENTRIES = 500
+const cache = new Map<string, { result: SearchResult; expiresAt: number }>()
+
+function cacheSet(key: string, value: { result: SearchResult; expiresAt: number }): void {
+  if (cache.has(key)) cache.delete(key)
+  cache.set(key, value)
+  if (cache.size > CACHE_MAX_ENTRIES) {
+    const oldest = cache.keys().next().value
+    if (oldest !== undefined) cache.delete(oldest)
+  }
+}
+
+// ─── 유틸 ─────────────────────────────────────────────────────────────────
+
+const BASE_URL = 'https://www.law.go.kr'
+
+// 일부 정부 API는 User-Agent 없는 요청을 봇으로 보고 연결을 끊는다(ECONNRESET).
+// TAX-015 진단에서 확인 — 법령·판례 호출 모두 명시적 UA 필요.
+const REQUEST_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (compatible; tax-search-system/1.0; +https://www.law.go.kr)',
+  Accept: 'application/json,text/plain,*/*',
+}
+
+/** YYYYMMDD → YYYY-MM-DD */
+function toIsoDate(raw: string): string {
+  if (!raw || raw.length !== 8) return raw
+  return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`
+}
+
+/** "YYYY.MM.DD" 또는 "YYYYMMDD" → "YYYY-MM-DD" (판례 선고일자 형식 혼재 대응) */
+function toIsoDateLoose(raw: string): string {
+  if (!raw) return ''
+  const digits = raw.replace(/[^0-9]/g, '')
+  if (digits.length === 8) {
+    return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`
+  }
+  return raw
+}
+
+/** 법종구분명 → TrustTier (CLAUDE.md §6.2) */
+function toTrustTier(lawType: string): TrustTier {
+  if (lawType === '법률' || lawType.endsWith('법')) return 'T1'
+  if (lawType.includes('대통령령') || lawType.endsWith('령')) return 'T1'
+  if (lawType.includes('규칙') || lawType.includes('규정')) return 'T1'
+  // T2: 부칙·경과조치 — 시점 분기 시 필수 (SSOT §7.6)
+  if (lawType.includes('부칙') || lawType.includes('경과조치')) return 'T2'
+  if (lawType.includes('예규') || lawType.includes('훈령') || lawType.includes('고시')) return 'T3'
+  // 알 수 없는 법종은 보수적으로 T3 처리 (오분류 방지)
+  return 'T3'
+}
+
+/**
+ * 조문내용 첫 줄에서 조문번호·제목 파싱
+ * 예: "제1조(목적) 이 법은..." → { number: "제1조", title: "목적" }
+ */
+function parseArticleHead(content: string): { number: string; title: string } {
+  const match = content.match(/^(제\d+조(?:의\d+)?)\(([^)]+)\)/)
+  if (match) return { number: match[1], title: match[2] }
+  const numOnly = content.match(/^(제\d+조(?:의\d+)?)/)
+  if (numOnly) return { number: numOnly[1], title: '' }
+  return { number: '', title: content.slice(0, 20) }
+}
+
+/** 단일 객체 | 배열 | undefined → 배열로 정규화 (API의 단수/복수 혼재 대응) */
+function toArrayNode<T>(node: T | T[] | undefined): T[] {
+  if (node == null) return []
+  return Array.isArray(node) ? node : [node]
+}
+
+/**
+ * 항·호·목 내용 평탄화 (TAX-032).
+ *  - 문자열은 그대로 반환한다.
+ *  - (세율표 등) 중첩 배열은 원문 줄 순서를 유지한 채 줄바꿈(\n)으로만 결합한다.
+ *  원문 텍스트만 순서대로 잇고 요약·의역·재배열은 절대 하지 않는다 (CLAUDE.md §6.1, V2).
+ */
+function flattenText(value: NestedText | undefined): string {
+  if (value == null) return ''
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) {
+    return value.map((v) => flattenText(v)).filter((s) => s !== '').join('\n')
+  }
+  return ''
+}
+
+/**
+ * 조문 본문 조립 — 조문내용(제목) + 항·호·목 내용을 원문 순서·문자 그대로 결합 (TAX-032).
+ *
+ * 통증 B 해소: 기존 content엔 조문내용(제목 줄)만 담겨 본문이 누락됐다.
+ * 응답에 이미 들어있는 항·호·목 하위노드를 추가 API 호출 없이 조립한다(JO 진단 2026-05-24).
+ *
+ * ⚠️ 원문 보존(§6.1·V2):
+ *   - 항번호(①)/호번호(1.)/목번호(가.)는 각 내용에 이미 포함되므로 번호를 따로 붙이지 않는다(중복 방지).
+ *   - 세율표(중첩 배열)는 줄 단위로 결합해 괘선을 보존한다.
+ *   - 요약·의역·재배열은 절대 하지 않는다.
+ */
+export function assembleArticleContent(article: RawArticle): string {
+  const parts: string[] = []
+
+  const head = typeof article.조문내용 === 'string' ? article.조문내용 : ''
+  if (head) parts.push(head)
+
+  // 조문 → 항 → 호 → 목 순서로 원문 텍스트만 결합
+  for (const hang of toArrayNode(article.항)) {
+    const hangText = flattenText(hang.항내용)
+    if (hangText) parts.push(hangText)
+
+    for (const ho of toArrayNode(hang.호)) {
+      const hoText = flattenText(ho.호내용)
+      if (hoText) parts.push(hoText)
+
+      for (const mok of toArrayNode(ho.목)) {
+        const mokText = flattenText(mok.목내용)
+        if (mokText) parts.push(mokText)
+      }
+    }
+  }
+
+  return parts.join('\n')
+}
+
+/** API 키 없는 퍼블릭 법령 원문 링크 생성 */
+function toSourceUrl(lsiSeq: string, efYd: string): string {
+  return `${BASE_URL}/lsInfoP.do?efYd=${efYd}&lsiSeq=${lsiSeq}`
+}
+
+/** API 키 없는 퍼블릭 판례 원문 링크 생성 (CLAUDE.md §7 — OC 키 노출 차단) */
+function toPrecSourceUrl(precSeq: string): string {
+  return `${BASE_URL}/precInfoP.do?precSeq=${precSeq}`
+}
+
+/** API 키 없는 퍼블릭 법령해석례 원문 링크 생성 (TAX-016A — 실호출로 패턴 확인) */
+function toExpcSourceUrl(expcSeq: string): string {
+  return `${BASE_URL}/LSW/expcInfoP.do?expcSeq=${expcSeq}`
+}
+
+/**
+ * 국세청 법령해석 원문 링크 — API가 taxlaw.nts.go.kr 공개 뷰어 링크를 직접 제공한다 (TAX-016B).
+ * expc·판례 상세링크와 달리 OC 키가 포함돼 있지 않아 그대로 사용 가능(실호출 확인).
+ * 방어적으로 혹시 키 파라미터가 있으면 제거하고, 유효 URL이 없으면 국세법령정보 홈으로 폴백.
+ */
+function toNtsExpcSourceUrl(rawLink: string): string {
+  const link = (rawLink ?? '').trim()
+  if (/^https?:\/\//i.test(link)) {
+    // 만일의 키 노출 방어: OC 파라미터 제거 (현재 NTS 링크엔 없음 — CLAUDE.md §7)
+    return link.replace(/([?&])OC=[^&]*/gi, '$1').replace(/[?&]+$/, '')
+  }
+  return 'https://taxlaw.nts.go.kr/'
+}
+
+/**
+ * 조세심판원 결정례 원문 링크 — 청구번호로 행정심판재결례 검색에 딥링크한다 (TAX-016C).
+ *  API 상세링크는 OC(키)를 포함하고(§7 위반), 키 없는 직접 뷰어(deccInfoP)는 일반 decc 전용이라
+ *  특별행정심판 일련번호를 해석하지 못함(실호출 확인). 청구번호 검색은 해당 레코드를 노출함(실호출 확인).
+ */
+function toTribunalSourceUrl(claimNo: string): string {
+  const q = (claimNo ?? '').trim()
+  return q ? `${BASE_URL}/allDeccSc.do?query=${encodeURIComponent(q)}` : `${BASE_URL}/allDeccSc.do`
+}
+
+/**
+ * 정렬: 개정일↓ → 시행일↓ → 조문번호↑ (SSOT §7.7, 결정론성 보장)
+ * 조문번호는 "제1조" < "제2조" < "제10조" 순서로 숫자 기준 정렬
+ */
+function sortTaxLaws(items: TaxLaw[]): TaxLaw[] {
+  return [...items].sort((a, b) => {
+    const byRevision = b.revisionDate.localeCompare(a.revisionDate)
+    if (byRevision !== 0) return byRevision
+
+    const byEnforcement = b.enforcementDate.localeCompare(a.enforcementDate)
+    if (byEnforcement !== 0) return byEnforcement
+
+    // 조문번호 숫자 기준 오름차순
+    const numA = parseInt(a.articleNumber.replace(/[^0-9]/g, '') || '0', 10)
+    const numB = parseInt(b.articleNumber.replace(/[^0-9]/g, '') || '0', 10)
+    return numA - numB
+  })
+}
+
+/**
+ * 비법령(판례·해석례) 정렬: 날짜↓ → 식별자↑ (결정론성 보장)
+ * 판례=선고일/사건번호, 해석례=회신일/안건번호 모두 동일 규칙 (TAX-015, TAX-016A).
+ */
+function sortByDecisionDate(items: TaxLaw[]): TaxLaw[] {
+  return [...items].sort((a, b) => {
+    const byDate = (b.decisionDate ?? '').localeCompare(a.decisionDate ?? '')
+    if (byDate !== 0) return byDate
+    return (a.caseNumber ?? '').localeCompare(b.caseNumber ?? '')
+  })
+}
+
+/** fetch 래퍼 — 5초 타임아웃, 에러 변환 */
+async function fetchWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), 5000)
+  try {
+    const res = await fetch(url, { signal: controller.signal, headers: REQUEST_HEADERS })
+    if (!res.ok) throw new ApiUnavailableError()
+    return res
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') throw new ApiTimeoutError()
+    if (err instanceof ApiTimeoutError || err instanceof ApiUnavailableError) throw err
+    throw new ApiUnavailableError()
+  } finally {
+    clearTimeout(id)
+  }
+}
+
+// ─── 비법령 4트랙 공통 빌더 ─────────────────────────────────────────────────
+
+interface NonLawBase {
+  sourceType: TaxLaw['sourceType']
+  trustTier: TrustTier
+  lawName: string
+  caseNumber: string
+  issuingBody: string
+  articleTitle: string
+  content: string
+  decisionDate: string
+  sourceUrl: string
+}
+
+function buildNonLawTaxLaw(base: NonLawBase): TaxLaw {
+  return {
+    sourceType: base.sourceType,
+    lawName: base.lawName,
+    articleNumber: '',
+    articleTitle: base.articleTitle,
+    content: base.content,
+    revisionDate: base.decisionDate,  // 정렬·표시 호환을 위해 결정일로 채움
+    enforcementDate: '',
+    sourceUrl: base.sourceUrl,
+    trustTier: base.trustTier,
+    caseNumber: base.caseNumber,
+    issuingBody: base.issuingBody,
+    decisionDate: base.decisionDate,
+  }
+}
+
+// ─── Adapter ──────────────────────────────────────────────────────────────
+
+/**
+ * 국세법령정보시스템 API Adapter — 법령 + 해석례(법제처·국세청) + 심판례 + 판례 검색
+ *  (Phase 1, TAX-015/016A/016B/016C)
+ *
+ * [법령]      lawSearch.do(target=law)          → lawService.do → 조문(article)
+ * [법제처해석] lawSearch.do(target=expc)         → lawService.do → 본문(질의요지·회답·이유)  [TAX-016A]
+ * [국세청해석] lawSearch.do(target=ntsCgmExpc)   → (목록만, 본문 없음) → 참고 목록             [TAX-016B]
+ * [심판례]    lawSearch.do(target=ttSpecialDecc) → lawService.do → 본문(주문·재결요지·이유)  [TAX-016C]
+ * [판례]      lawSearch.do(target=prec)         → (법원 출처만) lawService.do → 본문
+ *
+ * 다섯 자료를 병렬 검색해 Trust Tier 순(법령→해석례→심판례→판례)으로 병합한다.
+ * 비법령(해석례·심판례·판례) 검색이 실패해도 법령 결과는 반환한다(부분 실패 허용).
+ * 국세청 해석은 본문이 없어 발췌 인용 대상이 아니라 참고 목록으로만 노출된다(TAX-015B/D).
+ * 조세심판원 결정례는 본문이 있어 발췌 인용(citable)·V검증 대상이다(TAX-016C).
+ * Phase 4(벡터 DB) 이후 의미 유사도 검색으로 확장 예정.
+ */
+export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
+  private readonly apiKey = config.nationalTaxApiKey
+
+  async search(query: SearchQuery): Promise<SearchResult> {
+    // TAX-049: articleNumberHint를 캐시 키에 포함 — 같은 법령의 다른 조문 힌트는 다른 결과
+    const cacheKey = `${query.keyword.trim().toLowerCase()}|${query.articleNumberHint ?? ''}`
+
+    const cached = cache.get(cacheKey)
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.result
+    }
+
+    // TAX-049: 조문번호 힌트가 있으면 법령 본문(T1·T2)만 정확 추출.
+    //   - 사전 매칭 쿼리는 "법령명 + 제N조" 형태로 들어와 비법령 키워드 검색에 부적합
+    //     (예: "소득세법"로 prec/expc 검색하면 무관한 결과 폭증 → LLM 입력 윈도우 초과 위험)
+    //   - 비법령 자료는 다른 LLM rewrite 쿼리에서 자연 fallback으로 검색됨(중복 회피)
+    //   - 외부 API 호출 수 감소(5→1) → P95 부담 완화
+    let items: TaxLaw[]
+    if (query.articleNumberHint) {
+      const lawResult = await this.fetchArticles(query.keyword, query.articleNumberHint)
+      items = lawResult.items
+    } else {
+      // 법령 + 법제처 해석례 + 국세청 해석 + 조세심판원 결정례 + 판례 병렬 검색
+      //  비법령 검색 실패 시 빈 배열 폴백(부분 실패 허용)
+      const [lawResult, interpItems, ntsItems, tribunalItems, precItems] = await Promise.all([
+        this.fetchArticles(query.keyword),
+        this.searchInterpretations(query.keyword).catch(() => [] as TaxLaw[]),
+        this.searchNtsInterpretations(query.keyword).catch(() => [] as TaxLaw[]),
+        this.searchTribunal(query.keyword).catch(() => [] as TaxLaw[]),
+        this.searchPrecedents(query.keyword).catch(() => [] as TaxLaw[]),
+      ])
+
+      // Trust Tier 순 병합: 법령(T1·T2) → 해석례(T3) → 심판례(T3) → 판례(T4) — 직접 근거 우선 (CLAUDE.md §6.2)
+      //  법제처 해석례(본문 있음·발췌 인용 가능)를 국세청 해석(본문 없음·참고 목록)보다 앞에 둔다.
+      items = [
+        ...lawResult.items,
+        ...sortByDecisionDate(interpItems),
+        ...sortByDecisionDate(ntsItems),
+        ...sortByDecisionDate(tribunalItems),
+        ...sortByDecisionDate(precItems),
+      ]
+    }
+    const result: SearchResult = { items, totalCount: items.length }
+
+    const ttl = items.length === 0 ? CACHE_EMPTY_TTL_MS : CACHE_TTL_MS
+    cacheSet(cacheKey, { result, expiresAt: Date.now() + ttl })
+    return result
+  }
+
+  /** Step 1: 법령 목록 검색 */
+  private async searchLaws(keyword: string): Promise<RawLaw[]> {
+    const params = new URLSearchParams({
+      OC: this.apiKey,
+      target: 'law',
+      type: 'JSON',
+      query: keyword,
+      display: '5',
+      page: '1',
+    })
+    const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawSearch.do?${params}`)
+    const data = await res.json() as { LawSearch: RawLawSearch }
+    const ls = data.LawSearch
+
+    if (ls.resultCode !== '00') throw new ApiUnavailableError()
+    if (!ls.law) return []
+
+    return Array.isArray(ls.law) ? ls.law : [ls.law]
+  }
+
+  /** Step 2: 특정 법령의 조문 목록 조회 */
+  private async fetchLawArticles(lsiSeq: string): Promise<{ law: RawLawService['법령']; articles: RawArticle[] }> {
+    const params = new URLSearchParams({
+      OC: this.apiKey,
+      target: 'law',
+      MST: lsiSeq,
+      type: 'JSON',
+    })
+    const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawService.do?${params}`)
+    const data = await res.json() as RawLawService
+
+    const law = data.법령
+    if (!law?.기본정보) throw new ApiUnavailableError()
+    if (!law?.조문?.조문단위) return { law, articles: [] }
+
+    const raw = law.조문.조문단위
+    const all = Array.isArray(raw) ? raw : [raw]
+
+    // 실제 조문만 필터 (장·절·관 헤더 제외)
+    const articles = all.filter(a => a.조문여부 === '조문')
+    return { law, articles }
+  }
+
+  /**
+   * Step 1+2 조합: 법령 검색 → 상위 법령 조문 수집 → TaxLaw[]
+   *
+   * @param keyword             정식 법령명(예: "소득세법") — 약칭은 정규화됨
+   * @param articleNumberHint   (TAX-049) 부여 시 해당 조문번호와 일치하는 조문만 반환
+   */
+  private async fetchArticles(keyword: string, articleNumberHint?: string): Promise<SearchResult> {
+    // TAX-031: 약칭을 정식 법령명으로 정규화한 뒤 검색 (예: "상증세법" → "상속세 및 증여세법")
+    const normalized = normalizeLawName(keyword)
+    const laws = await this.searchLaws(normalized)
+    if (laws.length === 0) return { items: [], totalCount: 0 }
+
+    // TAX-031: 법령명 정확매칭 우선 선택(완전 > 접두 > 부분 > 폴백).
+    //  검색 API 랭킹 1위가 동음이의 법령일 수 있어(실측: "지방세법" → 1위 "지방교부세법")
+    //  무조건 laws[0]을 채택하면 오매칭된다. 정식 법령명과 가장 정확히 일치하는 법령을 고른다.
+    //  (Phase 4에서 다수 법령·벡터 검색으로 확장)
+    const topLaw = selectBestLaw(laws, normalized)!.law // laws.length>0 이므로 non-null
+    const { law: lawDetail, articles } = await this.fetchLawArticles(topLaw.법령일련번호)
+
+    const lawType = lawDetail.기본정보.법종구분.content
+    const revisionDate = toIsoDate(lawDetail.기본정보.공포일자)
+    const enforcementDate = toIsoDate(lawDetail.기본정보.시행일자)
+    const lawName = lawDetail.기본정보.법령명_한글
+    const trustTier = toTrustTier(lawType)
+
+    const items: TaxLaw[] = articles.map(article => {
+      const { number, title } = parseArticleHead(
+        typeof article.조문내용 === 'string' ? article.조문내용 : ''
+      )
+      return {
+        sourceType: '법령',
+        lawName,
+        articleNumber: number || String(article.조문번호),
+        articleTitle: title,
+        // TAX-032: 조문내용(제목)뿐 아니라 응답에 이미 온 항·호·목 본문을 원문 그대로 조립.
+        //  원문 변형 금지 — 번호 prepend·요약·재배열 없이 텍스트만 순서대로 결합 (CLAUDE.md §6.1)
+        content: assembleArticleContent(article),
+        revisionDate: article.조문시행일자
+          ? toIsoDate(article.조문시행일자)
+          : revisionDate,
+        enforcementDate,
+        sourceUrl: toSourceUrl(topLaw.법령일련번호, article.조문시행일자 || topLaw.시행일자),
+        trustTier,
+      }
+    })
+
+    // TAX-049: 조문번호 힌트가 주어지면 해당 조문만 필터(예: "제70조").
+    //   회계사 사전(`articleNumberHints.ts`)이 제공하는 결정론적 힌트로 T1 정확 추출.
+    //   힌트가 없으면 기존 동작(법령 전체 조문 반환) 유지 — 무영향.
+    const filtered = articleNumberHint
+      ? items.filter((it) => it.articleNumber === articleNumberHint)
+      : items
+
+    return {
+      items: sortTaxLaws(filtered),
+      totalCount: filtered.length,
+    }
+  }
+
+  /**
+   * 판례 검색 (target=prec) — 목록 조회 후 법원 출처만 본문 조회
+   *
+   * 국세법령정보시스템 출처 판례는 본문이 제공되지 않으므로(TAX-015 진단)
+   * 메타데이터(사건명·선고일·링크)만 담고 content는 빈 문자열로 둔다.
+   *
+   * TAX-015B: 본문 있는 판례(발췌 인용 대상)와 본문 없는 판례(⚪참고 목록 대상)를
+   *  모두 반환한다. 둘의 분리는 상위 계층(generateAnswer)이 content 유무로 수행한다.
+   *  본문 없는 판례를 여기서 제외하지 않는다(과거 TAX-015 정책에서 변경).
+   */
+  private async searchPrecedents(keyword: string): Promise<TaxLaw[]> {
+    // TAX-043: 비법령 입력 정규화 — 사건번호 정확매칭 우선, 그 외 불용어 제거
+    const n = normalizeNonLawQuery(keyword)
+    const effectiveKeyword = n.caseNumber ?? n.keyword
+    const params = new URLSearchParams({
+      OC: this.apiKey,
+      target: 'prec',
+      type: 'JSON',
+      query: effectiveKeyword,
+      // TAX-015B: 세법 판례 대부분이 국세 출처(본문 미제공)라, 본문 있는 판례를
+      //  충분히 확보하고 참고 목록도 풍부하게 만들기 위해 조회 건수를 확대(3→10).
+      display: '10',
+      page: '1',
+    })
+    const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawSearch.do?${params}`)
+    const data = await res.json() as { PrecSearch?: RawPrecSearch }
+    const ps = data.PrecSearch
+    if (!ps?.prec) return []
+
+    const list = Array.isArray(ps.prec) ? ps.prec : [ps.prec]
+
+    // 법원 출처만 본문 조회 (병렬). 국세청 출처는 본문 미제공 → 메타만.
+    const all = await Promise.all(
+      list.map(async (p) => {
+        const isCourtSource = (p.데이터출처명 ?? '').trim() !== '국세법령정보시스템'
+        const content = isCourtSource
+          ? await this.fetchPrecedentBody(p.판례일련번호)
+          : ''
+        return this.toPrecedentTaxLaw(p, content)
+      }),
+    )
+
+    // TAX-015B: 본문 있는 판례(발췌 인용)와 본문 없는 판례(참고 목록) 모두 반환.
+    //  generateAnswer가 content 유무로 citable/references를 분리한다.
+    return all
+  }
+
+  /** 판례 본문 조회 (법원 출처). 미제공·실패 시 빈 문자열 반환(부분 실패 허용) */
+  private async fetchPrecedentBody(precSeq: string): Promise<string> {
+    try {
+      const params = new URLSearchParams({
+        OC: this.apiKey,
+        target: 'prec',
+        ID: precSeq,
+        type: 'JSON',
+      })
+      const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawService.do?${params}`)
+      const data = await res.json() as { PrecService?: RawPrecService }
+      const p = data.PrecService
+      if (!p) return '' // 본문 미제공 시 {"Law":"일치하는 판례가 없습니다."}
+      // 판시사항 + 판결요지를 원문 그대로 결합 (HTML 태그 포함 — CLAUDE.md §6.1)
+      return [p.판시사항, p.판결요지].filter(Boolean).join('\n').trim()
+    } catch {
+      return ''
+    }
+  }
+
+  /** 판례 목록 항목 + 본문 → TaxLaw (sourceType='판례', T4) */
+  private toPrecedentTaxLaw(p: RawPrec, content: string): TaxLaw {
+    const court = (p.법원명 ?? '').trim()
+    const caseNo = (p.사건번호 ?? '').trim()
+    const decisionDate = toIsoDateLoose(p.선고일자 ?? '')
+    const issuingBody = court || (p.데이터출처명 ?? '').trim()
+    const lawName = court ? `${court} ${caseNo}`.trim() : caseNo
+
+    return buildNonLawTaxLaw({
+      sourceType: '판례',
+      trustTier: 'T4',
+      lawName,
+      caseNumber: caseNo,
+      issuingBody,
+      articleTitle: (p.사건명 ?? '').trim(),
+      content,
+      decisionDate,
+      sourceUrl: toPrecSourceUrl(p.판례일련번호),
+    })
+  }
+
+  /**
+   * 법령해석례 검색 (target=expc) — 목록 조회 후 각 본문 조회 (TAX-016A)
+   *
+   * 판례와 동일한 2단계(목록→본문). 본문(질의요지·회답·이유)이 제공되므로 발췌 인용 가능.
+   * 본문 조회 실패 시 content는 빈 문자열 → 상위 generateAnswer가 참고 목록으로 처리(TAX-015B).
+   * 기재부 질의 법령해석도 expc에 포함됨(질의기관명=기획재정부).
+   */
+  private async searchInterpretations(keyword: string): Promise<TaxLaw[]> {
+    // TAX-043: 비법령 입력 정규화 — 해석례는 사건번호 정확매칭 미지원이므로 keyword만 사용
+    const n = normalizeNonLawQuery(keyword)
+    const params = new URLSearchParams({
+      OC: this.apiKey,
+      target: 'expc',
+      type: 'JSON',
+      query: n.keyword,
+      display: '5',
+      page: '1',
+    })
+    const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawSearch.do?${params}`)
+    const data = await res.json() as { Expc?: RawExpcSearch }
+    const ex = data.Expc
+    if (!ex?.expc) return []
+
+    const list = Array.isArray(ex.expc) ? ex.expc : [ex.expc]
+
+    // 각 항목 본문 병렬 조회
+    const all = await Promise.all(
+      list.map(async (e) => {
+        const content = await this.fetchInterpretationBody(e.법령해석례일련번호)
+        return this.toInterpretationTaxLaw(e, content)
+      }),
+    )
+    return all
+  }
+
+  /** 법령해석례 본문 조회. 미제공·실패 시 빈 문자열 반환(부분 실패 허용) */
+  private async fetchInterpretationBody(expcSeq: string): Promise<string> {
+    try {
+      const params = new URLSearchParams({
+        OC: this.apiKey,
+        target: 'expc',
+        ID: expcSeq,
+        type: 'JSON',
+      })
+      const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawService.do?${params}`)
+      const data = await res.json() as { ExpcService?: RawExpcService }
+      const e = data.ExpcService
+      if (!e) return ''
+      // 질의요지 + 회답 + 이유를 원문 그대로 결합 (CLAUDE.md §6.1)
+      return [e.질의요지, e.회답, e.이유].filter(Boolean).join('\n').trim()
+    } catch {
+      return ''
+    }
+  }
+
+  /** 법령해석례 목록 항목 + 본문 → TaxLaw (sourceType='해석례', T3) */
+  private toInterpretationTaxLaw(e: RawExpc, content: string): TaxLaw {
+    const caseNo = (e.안건번호 ?? '').trim()
+    const issuingBody = (e.회신기관명 ?? '').trim()  // 해석을 회신한 기관(예: 법제처)
+    const decisionDate = toIsoDateLoose(e.회신일자 ?? '')
+    const lawName = issuingBody ? `${issuingBody} ${caseNo}`.trim() : caseNo
+
+    return buildNonLawTaxLaw({
+      sourceType: '해석례',
+      trustTier: 'T3',
+      lawName,
+      caseNumber: caseNo,
+      issuingBody,
+      articleTitle: (e.안건명 ?? '').trim(),
+      content,
+      decisionDate,
+      sourceUrl: toExpcSourceUrl(e.법령해석례일련번호),
+    })
+  }
+
+  /**
+   * 국세청 법령해석 검색 (target=ntsCgmExpc) — 목록만 조회 (TAX-016B)
+   *
+   * 국세청 해석은 목록(메타)만 제공되고 본문(전문)이 없다(실호출 확정 2026-05-22).
+   * 따라서 본문 조회 단계 없이 content=''인 TaxLaw로 정규화한다.
+   * 상위 generateAnswer가 본문 없는 비법령을 참고 목록(references)으로 처리한다(TAX-015B/D).
+   * 발췌 인용·law-verifier V검증 대상이 아니다(citation 승격 금지).
+   * 법제처 해석례(expc)와 같은 sourceType='해석례'이며, issuingBody='국세청'으로 구분된다.
+   */
+  private async searchNtsInterpretations(keyword: string): Promise<TaxLaw[]> {
+    // TAX-043: 비법령 입력 정규화 — NTS 해석은 사건번호 정확매칭 미지원이므로 keyword만 사용
+    const n = normalizeNonLawQuery(keyword)
+    const params = new URLSearchParams({
+      OC: this.apiKey,
+      target: 'ntsCgmExpc',
+      type: 'JSON',
+      query: n.keyword,
+      // 본문 조회(N+1)가 없어 호출이 가벼우므로 관련도 정렬 후보를 넉넉히 확보(10건).
+      //  법인세 실무 쟁점(가지급금 등) 핵심 공백을 메우는 자료원이다 (TAX-016B).
+      display: '10',
+      page: '1',
+    })
+    const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawSearch.do?${params}`)
+    const data = await res.json() as { CgmExpc?: RawNtsExpcSearch }
+    const ce = data.CgmExpc
+    if (!ce?.cgmExpc) return []
+
+    const list = Array.isArray(ce.cgmExpc) ? ce.cgmExpc : [ce.cgmExpc]
+    return list.map((e) => this.toNtsInterpretationTaxLaw(e))
+  }
+
+  /** 국세청 법령해석 목록 항목 → TaxLaw (sourceType='해석례', T3, 본문 없음) */
+  private toNtsInterpretationTaxLaw(e: RawNtsExpc): TaxLaw {
+    const caseNo = String(e.안건번호 ?? '').trim()
+    const issuingBody = String(e.해석기관명 ?? '').trim() || '국세청'  // 해석기관(국세청)
+    const decisionDate = toIsoDateLoose(String(e.해석일자 ?? ''))
+    const lawName = `${issuingBody} ${caseNo}`.trim()
+
+    return buildNonLawTaxLaw({
+      sourceType: '해석례',
+      trustTier: 'T3',
+      lawName,
+      caseNumber: caseNo,
+      issuingBody,
+      articleTitle: String(e.안건명 ?? '').trim(),
+      content: '',                       // 국세청 해석은 본문 미제공 → 참고 목록(TAX-015B/D)
+      decisionDate,
+      sourceUrl: toNtsExpcSourceUrl(e.법령해석상세링크),
+    })
+  }
+
+  /**
+   * 조세심판원 결정례 검색 (target=ttSpecialDecc) — 목록 조회 후 각 본문 조회 (TAX-016C)
+   *
+   * 판례와 동일한 2단계(목록→본문). 본문(주문·재결요지·이유)이 제공되므로 발췌 인용 가능
+   *  → generateAnswer의 citable로 흘러 law-verifier V1~V6 검증을 받는다.
+   * 본문 조회 실패 시 content는 빈 문자열 → 참고 목록으로 처리(TAX-015B).
+   * sourceType='심판례', trustTier='T3'(회계사 결정), issuingBody='조세심판원'.
+   */
+  private async searchTribunal(keyword: string): Promise<TaxLaw[]> {
+    // TAX-043: 비법령 입력 정규화 — 심판례는 청구번호 정확매칭 지원(접두 "조심")
+    const n = normalizeNonLawQuery(keyword)
+    const effectiveKeyword = n.caseNumber ?? n.keyword
+    const params = new URLSearchParams({
+      OC: this.apiKey,
+      target: 'ttSpecialDecc',
+      type: 'JSON',
+      query: effectiveKeyword,
+      display: '5',
+      page: '1',
+    })
+    const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawSearch.do?${params}`)
+    // 목록 래퍼는 일반 decc와 동일한 `{ Decc: { decc: [] } }` (재결청='조세심판원')
+    const data = await res.json() as { Decc?: RawTtSpecialDeccSearch }
+    const dc = data.Decc
+    if (!dc?.decc) return []
+
+    const list = Array.isArray(dc.decc) ? dc.decc : [dc.decc]
+    // 각 항목 본문 병렬 조회
+    const all = await Promise.all(
+      list.map(async (d) => {
+        const content = await this.fetchTribunalBody(d.특별행정심판재결례일련번호)
+        return this.toTribunalTaxLaw(d, content)
+      }),
+    )
+    return all
+  }
+
+  /** 조세심판원 결정례 본문 조회. 미제공·실패 시 빈 문자열 반환(부분 실패 허용) */
+  private async fetchTribunalBody(seq: string | number): Promise<string> {
+    try {
+      const params = new URLSearchParams({
+        OC: this.apiKey,
+        target: 'ttSpecialDecc',
+        ID: String(seq),
+        type: 'JSON',
+      })
+      const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawService.do?${params}`)
+      const data = await res.json() as { SpecialDeccService?: RawSpecialDeccService }
+      const s = data.SpecialDeccService
+      if (!s) return ''
+      // 주문 + 재결요지 + 이유를 원문 그대로 결합 (CLAUDE.md §6.1)
+      return [s.주문, s.재결요지, s.이유].filter(Boolean).join('\n').trim()
+    } catch {
+      return ''
+    }
+  }
+
+  /**
+   * 청구번호로 심판례 관계 원문 데이터를 조회한다 (TAX-033, IImpactMapPort 구현).
+   *
+   * 흐름:
+   *   1. 청구번호를 query로 목록 검색 → 일련번호·목록 청구번호 확보
+   *      ⚠️ 청구번호 공백 유무 혼재(진단5): 정규화 비교(공백 제거·소문자) 후 최선 일치 항목 선택
+   *   2. 일련번호로 본문 조회 → 관련법령·참조결정·세목 추출
+   *
+   * @param caseNumber 조회할 청구번호 (예: "조심2011서1540", "조심 2020부1558")
+   * @returns TribunalRelationsRaw 또는 null (해당 심판례를 찾지 못한 경우)
+   */
+  async fetchTribunalRelations(caseNumber: string): Promise<TribunalRelationsRaw | null> {
+    const normalizedQuery = (caseNumber ?? '').trim()
+    if (!normalizedQuery) return null
+
+    // 1단계: 목록 검색 — 청구번호를 query로 넣어 해당 심판례 찾기
+    let listItem: RawTtSpecialDecc | null = null
+    try {
+      const params = new URLSearchParams({
+        OC: this.apiKey,
+        target: 'ttSpecialDecc',
+        type: 'JSON',
+        query: normalizedQuery,
+        display: '10',   // 공백 유무 변이로 인해 여러 후보를 봐야 할 수 있음
+        page: '1',
+      })
+      const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawSearch.do?${params}`)
+      const data = await res.json() as { Decc?: RawTtSpecialDeccSearch }
+      const dc = data.Decc
+      if (dc?.decc) {
+        const list = Array.isArray(dc.decc) ? dc.decc : [dc.decc]
+        // 청구번호 공백 정규화 비교로 최선 일치 항목 선택 (진단5: 공백 혼재 확인)
+        const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase()
+        const target = normalize(normalizedQuery)
+        listItem =
+          list.find((d) => normalize(String(d.청구번호 ?? '')) === target) ??
+          list[0] ??    // 완전일치 없으면 첫 번째 폴백
+          null
+      }
+    } catch {
+      return null
+    }
+
+    if (!listItem) return null
+
+    // 2단계: 본문 조회 — 일련번호로 관련법령·참조결정·세목 추출
+    const serialNo = String(listItem.특별행정심판재결례일련번호 ?? '').trim()
+    const listCaseNo = String(listItem.청구번호 ?? '').trim()
+
+    let bodyData: RawSpecialDeccService | null = null
+    if (serialNo) {
+      try {
+        const params = new URLSearchParams({
+          OC: this.apiKey,
+          target: 'ttSpecialDecc',
+          ID: serialNo,
+          type: 'JSON',
+        })
+        const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawService.do?${params}`)
+        const data = await res.json() as { SpecialDeccService?: RawSpecialDeccService }
+        bodyData = data.SpecialDeccService ?? null
+      } catch {
+        // 본문 조회 실패 시 목록 데이터만으로 계속 진행
+      }
+    }
+
+    return {
+      caseNumber: listCaseNo || normalizedQuery,   // 목록값 우선, 없으면 입력값
+      serialNo,
+      caseName: String(listItem.사건명 ?? '').trim(),
+      taxType: String(bodyData?.세목 ?? '').trim(),
+      decisionDate: toIsoDateLoose(String(listItem.의결일자 ?? '')),
+      agency: String(listItem.재결청 ?? '조세심판원').trim(),
+      relatedLawsRaw: String(bodyData?.관련법령 ?? '').trim(),
+      referencesRaw: String(bodyData?.참조결정 ?? '').trim(),
+      sourceUrl: toTribunalSourceUrl(listCaseNo || normalizedQuery),
+    }
+  }
+
+  /** 조세심판원 결정례 목록 항목 + 본문 → TaxLaw (sourceType='심판례', T3) */
+  private toTribunalTaxLaw(d: RawTtSpecialDecc, content: string): TaxLaw {
+    const caseNo = String(d.청구번호 ?? '').trim()
+    const issuingBody = String(d.재결청 ?? '').trim() || '조세심판원'
+    const decisionDate = toIsoDateLoose(String(d.의결일자 ?? ''))
+    const lawName = issuingBody ? `${issuingBody} ${caseNo}`.trim() : caseNo
+
+    return buildNonLawTaxLaw({
+      sourceType: '심판례',
+      trustTier: 'T3',
+      lawName,
+      caseNumber: caseNo,
+      issuingBody,
+      articleTitle: String(d.사건명 ?? '').trim(),
+      content,
+      decisionDate,
+      sourceUrl: toTribunalSourceUrl(caseNo),
+    })
+  }
+}

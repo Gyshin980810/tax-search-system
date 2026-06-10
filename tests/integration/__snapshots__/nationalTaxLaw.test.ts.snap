@@ -1,0 +1,91 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`NationalTaxLawAdapter 통합 테스트 (MSW) > TAX-018 안전망 — 비법령 4트랙 변환 결과 스냅샷 > [스냅샷] 국세청 해석(법인22601-2200) 전체 필드 고정 1`] = `
+{
+  "articleNumber": "",
+  "articleTitle": "가지급금 인정이자 계산방법",
+  "caseNumber": "법인22601-2200",
+  "content": "",
+  "decisionDate": "2024-08-05",
+  "enforcementDate": "",
+  "issuingBody": "국세청",
+  "lawName": "국세청 법인22601-2200",
+  "revisionDate": "2024-08-05",
+  "sourceType": "해석례",
+  "sourceUrl": "https://taxlaw.nts.go.kr/qt/USEQTA002P.do?ntstDcmId=010000000000100201",
+  "trustTier": "T3",
+}
+`;
+
+exports[`NationalTaxLawAdapter 통합 테스트 (MSW) > TAX-018 안전망 — 비법령 4트랙 변환 결과 스냅샷 > [스냅샷] 법제처 해석례(12-0368) 전체 필드 고정 1`] = `
+{
+  "articleNumber": "",
+  "articleTitle": "양도소득세 비과세 대상 여부",
+  "caseNumber": "12-0368",
+  "content": "양도소득세 비과세 대상에 해당하는지 여부
+비과세 대상에 해당한다.
+관련 법령 규정에 따르면 해당 자산은 비과세 요건을 충족한다.",
+  "decisionDate": "2026-02-20",
+  "enforcementDate": "",
+  "issuingBody": "법제처",
+  "lawName": "법제처 12-0368",
+  "revisionDate": "2026-02-20",
+  "sourceType": "해석례",
+  "sourceUrl": "https://www.law.go.kr/LSW/expcInfoP.do?expcSeq=313499",
+  "trustTier": "T3",
+}
+`;
+
+exports[`NationalTaxLawAdapter 통합 테스트 (MSW) > TAX-018 안전망 — 비법령 4트랙 변환 결과 스냅샷 > [스냅샷] 심판례(조심 2020부1558) 전체 필드 고정 1`] = `
+{
+  "articleNumber": "",
+  "articleTitle": "쟁점농지 양도소득세 과세처분의 당부",
+  "caseNumber": "조심 2020부1558",
+  "content": "심판청구를 기각한다.
+조특법 제69조 제1항 단서에 따라 비과세 대상에 해당하지 않는다.
+1. 처분개요 청구인은 쟁점농지를 양도하고 양도소득세를 신고하였다. 처분청은 감면 대상이 아니라고 보아 과세하였다.",
+  "decisionDate": "2020-06-16",
+  "enforcementDate": "",
+  "issuingBody": "조세심판원",
+  "lawName": "조세심판원 조심 2020부1558",
+  "revisionDate": "2020-06-16",
+  "sourceType": "심판례",
+  "sourceUrl": "https://www.law.go.kr/allDeccSc.do?query=%EC%A1%B0%EC%8B%AC%202020%EB%B6%801558",
+  "trustTier": "T3",
+}
+`;
+
+exports[`NationalTaxLawAdapter 통합 테스트 (MSW) > TAX-018 안전망 — 비법령 4트랙 변환 결과 스냅샷 > [스냅샷] 판례(국세출처·본문없음) 전체 필드 고정 1`] = `
+{
+  "articleNumber": "",
+  "articleTitle": "양도소득세 과세 적법",
+  "caseNumber": "인천지방법원-2025-구단-50403",
+  "content": "",
+  "decisionDate": "2026-04-14",
+  "enforcementDate": "",
+  "issuingBody": "국세법령정보시스템",
+  "lawName": "인천지방법원-2025-구단-50403",
+  "revisionDate": "2026-04-14",
+  "sourceType": "판례",
+  "sourceUrl": "https://www.law.go.kr/precInfoP.do?precSeq=618619",
+  "trustTier": "T4",
+}
+`;
+
+exports[`NationalTaxLawAdapter 통합 테스트 (MSW) > TAX-018 안전망 — 비법령 4트랙 변환 결과 스냅샷 > [스냅샷] 판례(대법원·본문있음) 전체 필드 고정 1`] = `
+{
+  "articleNumber": "",
+  "articleTitle": "손해배상(기)",
+  "caseNumber": "2020다288436",
+  "content": "손해배상청구권의 성립 시기는 현실적으로 손해가 발생한 때이다.
+예인비가 손해의 범위에 포함되는지는 특별한 사정을 심리해야 한다.",
+  "decisionDate": "2026-03-12",
+  "enforcementDate": "",
+  "issuingBody": "대법원",
+  "lawName": "대법원 2020다288436",
+  "revisionDate": "2026-03-12",
+  "sourceType": "판례",
+  "sourceUrl": "https://www.law.go.kr/precInfoP.do?precSeq=618543",
+  "trustTier": "T4",
+}
+`;

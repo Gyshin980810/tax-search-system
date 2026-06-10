@@ -1,0 +1,25 @@
+{
+  "description": "TAX-052 비법령 대량 수집 키워드 셋 — 회계사 확정(2026-06-10). 5세목 대표 쟁점. 코드(collectNonlaw.ts) 수정 없이 이 파일만 편집해 키워드를 가감한다. category는 집계·로그 표시용일 뿐 검색에는 keyword만 사용된다.",
+  "decidedBy": "회계사",
+  "decidedAt": "2026-06-10",
+  "keywords": [
+    { "category": "소득세", "keyword": "1세대 1주택 양도소득세 비과세" },
+    { "category": "소득세", "keyword": "양도소득 필요경비" },
+    { "category": "소득세", "keyword": "사업소득 추계과세" },
+    { "category": "소득세", "keyword": "부당행위계산부인" },
+    { "category": "법인세", "keyword": "접대비 손금불산입" },
+    { "category": "법인세", "keyword": "대손금 손금산입" },
+    { "category": "법인세", "keyword": "법인 부당행위계산부인" },
+    { "category": "법인세", "keyword": "가지급금 인정이자" },
+    { "category": "부가가치세", "keyword": "매입세액 불공제" },
+    { "category": "부가가치세", "keyword": "세금계산서 부실기재" },
+    { "category": "부가가치세", "keyword": "면세 전용 부가가치세" },
+    { "category": "부가가치세", "keyword": "대손세액공제" },
+    { "category": "상속증여세", "keyword": "비상장주식 평가" },
+    { "category": "상속증여세", "keyword": "명의신탁 증여의제" },
+    { "category": "상속증여세", "keyword": "가업상속공제" },
+    { "category": "종합부동산세", "keyword": "종합부동산세 1세대 1주택 판정" },
+    { "category": "종합부동산세", "keyword": "종합부동산세 합산배제" },
+    { "category": "종합부동산세", "keyword": "종합부동산세 세부담 상한" }
+  ]
+}

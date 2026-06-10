@@ -1,0 +1,64 @@
+{
+  "pass_k": 3,
+  "target": 1.0,
+  "threshold": 1.0,
+  "cases": {
+    "G1": {
+      "question": "근로소득이 있는 거주자의 종합소득세 계산 시 본인 기본공제 금액은 얼마인가요?",
+      "expected_laws": [
+        { "law_name": "소득세법", "article_number": "제50조 제1항 제1호", "trust_tier": "T1" }
+      ],
+      "expected_labels": ["🟢"],
+      "expected_time_label": "[현행]",
+      "expected_v5": true
+    },
+    "G2": {
+      "question": "1세대 1주택 비과세 요건과 보유 기간 요건이 어떻게 되나요?",
+      "expected_laws": [
+        { "law_name": "소득세법", "article_number": "제89조 제1항 제3호", "trust_tier": "T1" },
+        { "law_name": "소득세법 시행령", "article_number": "제154조", "trust_tier": "T1" }
+      ],
+      "expected_labels": ["🟢"],
+      "expected_time_label": "[현행]",
+      "expected_v5": true
+    },
+    "G3": {
+      "question": "법인의 업무와 직접 관련 없는 지출이 손금으로 인정되는 범위는 어떻게 되나요?",
+      "expected_laws": [
+        { "law_name": "법인세법", "article_number": "제19조", "trust_tier": "T1" },
+        { "law_name": "법인세법", "article_number": "제27조", "trust_tier": "T1" }
+      ],
+      "expected_labels": ["🟢"],
+      "expected_time_label": "[현행]",
+      "expected_v5": true
+    },
+    "G4A": {
+      "question": "현재 기준으로 상속세 기초공제 금액이 얼마인가요?",
+      "expected_laws": [
+        { "law_name": "상속세 및 증여세법", "article_number": "제18조 제1항", "trust_tier": "T1" }
+      ],
+      "expected_labels": ["🟢"],
+      "expected_time_label": "[현행]",
+      "expected_v5": true
+    },
+    "G4B": {
+      "question": "2019년 12월 31일 이전 기준으로 적용되던 상속세 기초공제 금액은 얼마였나요?",
+      "expected_laws": [
+        { "law_name": "상속세 및 증여세법", "article_number": "제18조 제1항", "trust_tier": "T1" }
+      ],
+      "expected_labels": ["⚫"],
+      "expected_time_label_pattern": "폐지",
+      "expected_v5": true,
+      "note": "폐지 라벨 포함 여부만 검증 — 정확한 날짜는 실제 API 응답으로 결정"
+    },
+    "G5": {
+      "question": "토지와 건물에 대한 재산세 납부 기한이 각각 언제인가요?",
+      "expected_laws": [
+        { "law_name": "지방세법", "article_number": "제115조", "trust_tier": "T1", "law_type": "LOCAL" }
+      ],
+      "expected_labels": ["🟢"],
+      "expected_time_label": "[현행]",
+      "expected_v5": true
+    }
+  }
+}
