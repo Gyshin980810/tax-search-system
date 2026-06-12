@@ -1,0 +1,1172 @@
+{
+  "version": "2026-06-11-draft",
+  "description": "G-3 시점 검색 골든셋 20건 — 보류(2026-06-11 회계사 결정 A안). 실측 결과 과거 시행본 조문이 국세법령 API에서 검색되지 않아 T1 직접근거 0건의 구조적 한계 확인 (13/20 E-VERIFY-FAIL, 응답 7건도 T1 인용 0). 시점 정확도 합격선(≥95%)은 현 구조로 충족 불가. TAX-6A-9(법령 연혁 API — 시행일자별 조회) 연동 선행 후 재실측·expectedStatus 확정 예정. 그 전까지 expectedStatus 전건 미기재(run_golden 정적 러너 제외). 실측 원시결과: docs/reports/phase6a_review_temporal.json. (AI 자동 생성 금지, CLAUDE.md §8.1)",
+  "_draft": true,
+  "cases": [
+    {
+      "id": "G3-01",
+      "description": "법인세율 3구간 — 2017년 기준(2018년 개정 전), targetDate 2017-12-31",
+      "_note": "2018년 개정 전 구법(10%/20%/22%, 3구간) 기준. 회계사: 실제 원문·시행일·expectedStatus 확정 필요.",
+      "question": "2017년 기준 법인세 세율 구간은 어떻게 되나요?",
+      "targetDate": "2017-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "법인세법",
+          "articleNumber": "제55조 제1항",
+          "articleTitle": "세율",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/법인세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2017년 기준 법인세 세율 구간은 어떻게 되나요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "법인세법",
+              "articleNumber": "제55조 제1항",
+              "articleTitle": "세율",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/법인세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-02",
+      "description": "법인세율 4구간 — 2019년 기준(2018년 개정 후), targetDate 2019-12-31",
+      "_note": "2018년 개정 후 신법(10%/20%/22%/25%, 4구간). 회계사: 실제 원문·시행일·expectedStatus 확정 필요.",
+      "question": "2019년 기준 법인세 세율은 어떻게 되나요? 과세표준 3,000억원 초과 구간 세율도 알려주세요.",
+      "targetDate": "2019-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "법인세법",
+          "articleNumber": "제55조 제1항",
+          "articleTitle": "세율",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/법인세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2019년 기준 법인세 세율은 어떻게 되나요? 과세표준 3,000억원 초과 구간 세율도 알려주세요.",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "법인세법",
+              "articleNumber": "제55조 제1항",
+              "articleTitle": "세율",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/법인세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-03",
+      "description": "소득세 최고세율 — 2017년 기준(40%, 5억 초과), targetDate 2017-12-31",
+      "_note": "2018년 개정 전 최고세율 40%(5억 초과). 회계사: 실제 원문·시행일·expectedStatus 확정 필요.",
+      "question": "2017년 기준 소득세 최고세율은 얼마였나요? 과세표준 구간별로 알려주세요.",
+      "targetDate": "2017-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "소득세법",
+          "articleNumber": "제55조 제1항",
+          "articleTitle": "세율",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/소득세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2017년 기준 소득세 최고세율은 얼마였나요? 과세표준 구간별로 알려주세요.",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "소득세법",
+              "articleNumber": "제55조 제1항",
+              "articleTitle": "세율",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/소득세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-04",
+      "description": "소득세 최고세율 — 2019년 기준(42%, 3억~5억 구간 신설), targetDate 2019-12-31",
+      "_note": "2018년 개정 후 42% 구간(3억~5억) 신설. 회계사: 실제 원문·시행일·expectedStatus 확정 필요.",
+      "question": "2019년 기준 소득세 최고세율과 3억원 초과 구간 세율이 어떻게 되나요?",
+      "targetDate": "2019-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "소득세법",
+          "articleNumber": "제55조 제1항",
+          "articleTitle": "세율",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/소득세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2019년 기준 소득세 최고세율과 3억원 초과 구간 세율이 어떻게 되나요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "소득세법",
+              "articleNumber": "제55조 제1항",
+              "articleTitle": "세율",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/소득세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-05",
+      "description": "소득세 근로소득공제 한도 — 2019년 기준, targetDate 2019-12-31",
+      "_note": "근로소득공제 한도 변경 추적. 회계사: 2019년 한도 금액·실제 원문·expectedStatus 확정 필요.",
+      "question": "2019년 귀속 근로소득 계산 시 근로소득공제 한도는 얼마인가요?",
+      "targetDate": "2019-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "소득세법",
+          "articleNumber": "제47조 제1항",
+          "articleTitle": "근로소득공제",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/소득세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2019년 귀속 근로소득 계산 시 근로소득공제 한도는 얼마인가요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "소득세법",
+              "articleNumber": "제47조 제1항",
+              "articleTitle": "근로소득공제",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/소득세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-06",
+      "description": "소득세 자녀세액공제 — 2018년 기준(2명 이상 구간 변경), targetDate 2018-12-31",
+      "_note": "자녀세액공제 2명 이상 구간이 2018년 이후 변경됨. 회계사: 실제 원문·시행일·expectedStatus 확정 필요.",
+      "question": "2018년 귀속 종합소득세 계산 시 자녀세액공제 금액은 자녀 수에 따라 어떻게 되나요?",
+      "targetDate": "2018-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "소득세법",
+          "articleNumber": "제59조의2 제1항",
+          "articleTitle": "자녀세액공제",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/소득세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2018년 귀속 종합소득세 계산 시 자녀세액공제 금액은 자녀 수에 따라 어떻게 되나요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "소득세법",
+              "articleNumber": "제59조의2 제1항",
+              "articleTitle": "자녀세액공제",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/소득세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-07",
+      "description": "부가가치세 간이과세 기준금액 — 2020년 기준(4,800만원 이하), targetDate 2020-12-31",
+      "_note": "2021년 개정으로 기준금액이 4,800만원→8,000만원으로 인상됨. 회계사: 개정 전 원문·expectedStatus 확정 필요.",
+      "question": "2020년 기준 부가가치세 간이과세 적용 기준금액은 얼마인가요?",
+      "targetDate": "2020-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "부가가치세법",
+          "articleNumber": "제61조 제1항",
+          "articleTitle": "간이과세의 적용 범위",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/부가가치세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2020년 기준 부가가치세 간이과세 적용 기준금액은 얼마인가요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "부가가치세법",
+              "articleNumber": "제61조 제1항",
+              "articleTitle": "간이과세의 적용 범위",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/부가가치세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-08",
+      "description": "부가가치세 간이과세 기준금액 — 2021년 기준(8,000만원 이하, 개정 후), targetDate 2021-12-31",
+      "_note": "2021년 개정으로 기준금액 8,000만원으로 인상. 회계사: 개정 후 원문·시행일·expectedStatus 확정 필요.",
+      "question": "2021년 기준 부가가치세 간이과세 적용 기준금액은 얼마인가요?",
+      "targetDate": "2021-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "부가가치세법",
+          "articleNumber": "제61조 제1항",
+          "articleTitle": "간이과세의 적용 범위",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/부가가치세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2021년 기준 부가가치세 간이과세 적용 기준금액은 얼마인가요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "부가가치세법",
+              "articleNumber": "제61조 제1항",
+              "articleTitle": "간이과세의 적용 범위",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/부가가치세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-09",
+      "description": "1세대 1주택 비과세 보유기간 — 2017년 기준(2년, 거주요건 없음), targetDate 2017-12-31",
+      "_note": "2017년 이전: 조정대상지역 무관 2년 보유만 요건. 2018년 이후 조정대상지역 거주 요건 추가됨. 회계사: 원문·expectedStatus 확정.",
+      "question": "2017년 기준 1세대 1주택 양도소득세 비과세를 받으려면 보유기간이 얼마나 되어야 하나요?",
+      "targetDate": "2017-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "소득세법 시행령",
+          "articleNumber": "제154조 제1항",
+          "articleTitle": "1세대 1주택의 범위",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/소득세법시행령",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2017년 기준 1세대 1주택 양도소득세 비과세를 받으려면 보유기간이 얼마나 되어야 하나요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "소득세법 시행령",
+              "articleNumber": "제154조 제1항",
+              "articleTitle": "1세대 1주택의 범위",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/소득세법시행령",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-10",
+      "description": "1세대 1주택 조정대상지역 거주요건 — 2020년 기준(2년 거주 추가), targetDate 2020-12-31",
+      "_note": "2018년 9월 13일 이후 취득분 조정대상지역 거주 2년 추가. 회계사: 실제 원문·경과조치 조항·expectedStatus 확정.",
+      "question": "2020년에 조정대상지역 내 1세대 1주택을 양도할 때 비과세 요건(보유기간·거주기간)은 어떻게 되나요?",
+      "targetDate": "2020-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "소득세법 시행령",
+          "articleNumber": "제154조 제1항",
+          "articleTitle": "1세대 1주택의 범위",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/소득세법시행령",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2020년에 조정대상지역 내 1세대 1주택을 양도할 때 비과세 요건(보유기간·거주기간)은 어떻게 되나요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "소득세법 시행령",
+              "articleNumber": "제154조 제1항",
+              "articleTitle": "1세대 1주택의 범위",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/소득세법시행령",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-11",
+      "description": "1세대 1주택 고가주택 기준 — 2020년 기준(9억원 초과), targetDate 2020-12-31",
+      "_note": "고가주택 기준 9억원. 2022년 12억원으로 상향됨. 회계사: 2020년 당시 기준·실제 원문·expectedStatus 확정.",
+      "question": "2020년 기준 1세대 1주택 비과세 제외 대상인 고가주택 기준 금액은 얼마인가요?",
+      "targetDate": "2020-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "소득세법 시행령",
+          "articleNumber": "제156조의2 제5항",
+          "articleTitle": "고가주택에 대한 장기보유특별공제액의 계산",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/소득세법시행령",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2020년 기준 1세대 1주택 비과세 제외 대상인 고가주택 기준 금액은 얼마인가요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "소득세법 시행령",
+              "articleNumber": "제156조의2 제5항",
+              "articleTitle": "고가주택에 대한 장기보유특별공제액의 계산",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/소득세법시행령",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-12",
+      "description": "종합부동산세 기본공제 — 2020년 기준(주택 6억/1세대 1주택자 9억), targetDate 2020-12-31",
+      "_note": "2020년 기준 일반 6억, 1세대 1주택자 9억. 2023년 개정으로 9억/12억으로 인상. 회계사: 원문·expectedStatus 확정.",
+      "question": "2020년 기준 종합부동산세 주택분 기본공제 금액은 얼마인가요? 1세대 1주택자의 경우는요?",
+      "targetDate": "2020-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "종합부동산세법",
+          "articleNumber": "제8조 제1항",
+          "articleTitle": "과세표준",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/종합부동산세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2020년 기준 종합부동산세 주택분 기본공제 금액은 얼마인가요? 1세대 1주택자의 경우는요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "종합부동산세법",
+              "articleNumber": "제8조 제1항",
+              "articleTitle": "과세표준",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/종합부동산세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-13",
+      "description": "종합부동산세 주택분 세율 — 2022년 기준(다주택자 중과), targetDate 2022-12-31",
+      "_note": "2021년 이후 다주택자 종부세 중과 강화. 회계사: 2022년 세율 구간·원문·expectedStatus 확정.",
+      "question": "2022년 기준 종합부동산세 주택분 세율은 어떻게 되나요? 조정대상지역 2주택 이상의 경우 세율도 포함해서 알려주세요.",
+      "targetDate": "2022-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "종합부동산세법",
+          "articleNumber": "제9조 제1항",
+          "articleTitle": "세율 및 세액",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/종합부동산세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2022년 기준 종합부동산세 주택분 세율은 어떻게 되나요? 조정대상지역 2주택 이상의 경우 세율도 포함해서 알려주세요.",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "종합부동산세법",
+              "articleNumber": "제9조 제1항",
+              "articleTitle": "세율 및 세액",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/종합부동산세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-14",
+      "description": "종합부동산세 기본공제 — 2023년 기준(일반 9억/1주택자 12억, 완화), targetDate 2023-12-31",
+      "_note": "2023년 개정으로 기본공제 인상(6억→9억, 9억→12억). 회계사: 개정 후 원문·expectedStatus 확정.",
+      "question": "2023년 기준 종합부동산세 주택분 기본공제 금액은 얼마인가요?",
+      "targetDate": "2023-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "종합부동산세법",
+          "articleNumber": "제8조 제1항",
+          "articleTitle": "과세표준",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/종합부동산세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2023년 기준 종합부동산세 주택분 기본공제 금액은 얼마인가요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "종합부동산세법",
+              "articleNumber": "제8조 제1항",
+              "articleTitle": "과세표준",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/종합부동산세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-15",
+      "description": "증여재산공제 직계존속 — 2015년 기준(3,000만원), targetDate 2015-12-31",
+      "_note": "2016년 1월 1일부터 직계존속 증여공제 5,000만원으로 인상. 2015년까지는 3,000만원. 회계사: 원문·expectedStatus 확정.",
+      "question": "2015년에 부모님으로부터 증여받을 때 증여재산공제 한도는 얼마였나요?",
+      "targetDate": "2015-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "상속세 및 증여세법",
+          "articleNumber": "제53조 제1항 제1호",
+          "articleTitle": "증여재산 공제",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/상속세및증여세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2015년에 부모님으로부터 증여받을 때 증여재산공제 한도는 얼마였나요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "상속세 및 증여세법",
+              "articleNumber": "제53조 제1항 제1호",
+              "articleTitle": "증여재산 공제",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/상속세및증여세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-16",
+      "description": "증여재산공제 직계존속 — 2020년 기준(5,000만원, 개정 후), targetDate 2020-12-31",
+      "_note": "2016년 이후 직계존속 증여공제 5,000만원. 회계사: 원문·expectedStatus 확정.",
+      "question": "2020년에 부모님으로부터 증여받을 때 증여재산공제 한도는 얼마인가요?",
+      "targetDate": "2020-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "상속세 및 증여세법",
+          "articleNumber": "제53조 제1항 제1호",
+          "articleTitle": "증여재산 공제",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/상속세및증여세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2020년에 부모님으로부터 증여받을 때 증여재산공제 한도는 얼마인가요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "상속세 및 증여세법",
+              "articleNumber": "제53조 제1항 제1호",
+              "articleTitle": "증여재산 공제",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/상속세및증여세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-17",
+      "description": "퇴직소득세 환산급여 — 2015년 기준(구 방식), targetDate 2015-12-31",
+      "_note": "2016년 개정으로 퇴직소득세 계산방식 전면 개편. 2015년 이전 방식 확인용. 회계사: 원문·expectedStatus 확정.",
+      "question": "2015년 기준 퇴직소득세 계산 방법은 어떻게 되나요? 환산급여 방식으로 설명해 주세요.",
+      "targetDate": "2015-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "소득세법",
+          "articleNumber": "제55조 제2항",
+          "articleTitle": "세율",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/소득세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2015년 기준 퇴직소득세 계산 방법은 어떻게 되나요? 환산급여 방식으로 설명해 주세요.",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "소득세법",
+              "articleNumber": "제55조 제2항",
+              "articleTitle": "세율",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/소득세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-18",
+      "description": "퇴직소득세 환산급여 — 2019년 기준(2016년 개정 후 방식), targetDate 2019-12-31",
+      "_note": "2016년 이후 퇴직소득세 개정방식. 회계사: 개정 후 조문(소득세법 제55조 제2항·제48조 등)·원문·expectedStatus 확정.",
+      "question": "2019년에 퇴직하는 경우 퇴직소득세 계산 방법은 어떻게 되나요?",
+      "targetDate": "2019-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "소득세법",
+          "articleNumber": "제48조",
+          "articleTitle": "퇴직소득공제",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/소득세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2019년에 퇴직하는 경우 퇴직소득세 계산 방법은 어떻게 되나요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "소득세법",
+              "articleNumber": "제48조",
+              "articleTitle": "퇴직소득공제",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/소득세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-19",
+      "description": "주택 취득세율 — 2020년 7월 기준(1주택 1~3%, 중과 전), targetDate 2020-07-31",
+      "_note": "2020년 8월 12일 지방세법 개정으로 다주택 취득세 중과. 7월 이전 기준 확인용. 회계사: 지방세법 조문·원문·expectedStatus 확정.",
+      "question": "2020년 7월 기준 주택 취득세율은 어떻게 되나요?",
+      "targetDate": "2020-07-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "지방세법",
+          "articleNumber": "제11조 제1항 제8호",
+          "articleTitle": "부동산 취득의 세율",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/지방세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2020년 7월 기준 주택 취득세율은 어떻게 되나요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "지방세법",
+              "articleNumber": "제11조 제1항 제8호",
+              "articleTitle": "부동산 취득의 세율",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/지방세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    },
+    {
+      "id": "G3-20",
+      "description": "다주택자 취득세 중과 — 2020년 8월 이후(조정대상지역 2주택 8%, 3주택 12%), targetDate 2020-12-31",
+      "_note": "2020년 8월 12일 지방세법 개정: 조정대상지역 2주택 8%, 3주택 이상 12% 중과. 회계사: 원문·경과조치·expectedStatus 확정.",
+      "question": "2020년 8월 이후 조정대상지역 내 주택을 2채 취득할 경우 취득세율은 어떻게 되나요?",
+      "targetDate": "2020-12-31",
+      "sourceLaws": [
+        {
+          "sourceType": "법령",
+          "lawName": "지방세법",
+          "articleNumber": "제13조의2 제1항",
+          "articleTitle": "주택 유상거래 취득 세율 특례",
+          "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+          "revisionDate": "(검수 후 기재)",
+          "enforcementDate": "(검수 후 기재)",
+          "sourceUrl": "https://www.law.go.kr/법령/지방세법",
+          "trustTier": "T1"
+        }
+      ],
+      "answer": {
+        "rawQuestion": "2020년 8월 이후 조정대상지역 내 주택을 2채 취득할 경우 취득세율은 어떻게 되나요?",
+        "citations": [
+          {
+            "taxLaw": {
+              "sourceType": "법령",
+              "lawName": "지방세법",
+              "articleNumber": "제13조의2 제1항",
+              "articleTitle": "주택 유상거래 취득 세율 특례",
+              "content": "(회계사 검수 후 실제 API 원문으로 교체)",
+              "revisionDate": "(검수 후 기재)",
+              "enforcementDate": "(검수 후 기재)",
+              "sourceUrl": "https://www.law.go.kr/법령/지방세법",
+              "trustTier": "T1"
+            },
+            "label": "🟢직접근거",
+            "excerpt": "(회계사 검수 후 기재)",
+            "temporalLabel": "[적용 시점: (검수 후 기재)]"
+          }
+        ],
+        "summary": "",
+        "temporalLabel": "[적용 시점: (검수 후 기재)]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": ""
+    }
+  ],
+  "_hold": {
+    "reason": "past-enforcement-version not searchable",
+    "followupTicket": "TAX-6A-9",
+    "decidedAt": "2026-06-11"
+  }
+}

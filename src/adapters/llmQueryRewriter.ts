@@ -85,6 +85,7 @@ export class OpenAIQueryRewriterAdapter implements IQueryRewriterPort {
       const queries: SearchQuery[] = object.queries.map(q => ({
         keyword: q.keyword.trim(),
         requestedAt: temporal.requestedAt,
+        ...(temporal.targetDate ? { targetDate: temporal.targetDate } : {}),
       }))
       // TAX-042G: 광범위 키워드 거버넌스 — LLM이 한 단어로 반환한 경우
       // 질문에서 사실축 토큰을 추출해 자동 부착. 후처리는 SearchQuery.keyword
@@ -93,7 +94,10 @@ export class OpenAIQueryRewriterAdapter implements IQueryRewriterPort {
       // TAX-049: 조문번호 매핑 사전(보조) — LLM이 생성 못하는 "제70조" 류
       // 조문번호를 결정론적으로 prepend해 외부 API 정확매칭 트리거.
       // 미커버 질문은 빈 배열 반환 → LLM 결과만으로 fallback(회귀 없음).
-      const hintQueries = lookupArticleHints(question, temporal.requestedAt)
+      const rawHintQueries = lookupArticleHints(question, temporal.requestedAt)
+      const hintQueries = temporal.targetDate
+        ? rawHintQueries.map(q => ({ ...q, targetDate: temporal.targetDate }))
+        : rawHintQueries
       // 사전 N개 매칭 시 LLM 결과는 (3-N)개로 줄여 외부 검색 총 호출 ≤3 유지.
       // LLM 최소 1개는 보장(사전 매칭이 회계사 질문 전체 의도를 다 잡지 못할 수 있음).
       const llmCap = Math.max(MAX_LLM_QUERIES - hintQueries.length, 1)

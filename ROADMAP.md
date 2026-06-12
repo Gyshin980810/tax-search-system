@@ -7,8 +7,8 @@
 >
 > 충돌 시 상위 문서가 우선합니다. 본 로드맵의 모든 결정은 PRD/SSOT v2.0과 정합해야 합니다.
 >
-> 작성일: 2026-05-13 (v1.0) / 갱신: 2026-06-10 (v2.1 — Phase 5 판례·예규 적재 완결(TAX-052~055) + G-2 골든셋 30건 검수·머지(golden_direct.json 66건) + G-2 라벨 정확도 100% → Phase 6A 착수 가능)
-> 버전: 2.1
+> 작성일: 2026-05-13 (v1.0) / 갱신: 2026-06-11 (v2.2 — TAX-056 베타 접근 패스코드 게이트 완결(proxy.ts+HMAC 세션+Vercel 배포) + E2E storageState 인증 셋업 추가(Playwright 6/6 PASS) → Phase 6A 착수 가능)
+> 버전: 2.2
 > 작성자: Claude + 회계사
 
 ---
@@ -528,7 +528,7 @@ PRD §16의 M0~M6 마일스톤을 Phase로 정리합니다. 각 Phase는 상위 
 
 ---
 
-## 3. 현재 상태 (2026-06-10 기준 — v2.0)
+## 3. 현재 상태 (2026-06-11 기준 — v2.2)
 
 | 단계 | 상태 | 예상 기간 | 비고 |
 |---|---|---|---|
@@ -591,10 +591,13 @@ PRD §16의 M0~M6 마일스톤을 Phase로 정리합니다. 각 Phase는 상위 
 
 **→ Phase 6A 착수 가능 (지방세법령 API 통합 + 시점 검색 + G-3·G-4 골든셋)**
 
+**✅ Phase 6A 진입 전 잔여 처리 완료 (2026-06-11):**
+- ✅ TAX-056 베타 접근 게이트 구현·Vercel 배포 완료 (proxy.ts+HMAC 세션, vitest 450/450)
+- ✅ UI E2E Playwright storageState 인증 셋업 추가 — 6/6 PASS (TAX-056 베타 게이트 차단 해소)
+
 **잔여 (선택·저우선):**
 - ⏸ BUG-004 V1 시점·content 일치 — Phase 4 보류 유지 (회계사 결정)
 - ⬜ 비법령 검색 정확도 단계 2·3 (TAX-044·045) — 운영 데이터 1~2주 확보 후
-- ⬜ UI E2E Phase 4·5 회귀 확인 (Phase 6A 진입 전 권장)
 - ⬜ P95 answer tail latency 후속 — 벡터 무관 확정, 병목은 gpt-4o-mini 긴 content 생성 (현재 누적 P95는 합격선 내)
 
 **Phase 3 회계사 노출 정책:**
@@ -786,6 +789,7 @@ PRD §18을 정확성·운영·보안 카테고리로 재분류했습니다.
 | 2026-05-23 | 1.7 | **Phase 4 설계·골든셋 보조 완료 + 운영 환류 트랙 계획 반영.** Phase 4(벡터 DB) 설계 게이트 통과(TAX-026-A, 회계사 결정 4개 확정: THRESHOLD=3·신규 usecase·OpenAI 임베딩·pgvector) 및 B~H 서브태스크 등록. **골든셋 작성 보조 인프라(TAX-028) 구현 완료** — 시드→원문 자동 fetch→V1·V2 골격 생성(`scripts/golden/buildCases.ts`)·현황 리포트(`status.ts`)·시드 템플릿(`golden_seeds.json`), 정답(summary)은 회계사 작성 강제(자기참조 방지). 후속 P95 재측정(TAX-029)·운영 환류(TAX-030) 티켓 초안화. §2에 **"향후 트랙 — 틀린 케이스 → 골든셋 환류"** 섹션 신설(자동 FAIL 수집 + 회계사 "👎 신고"로 silent failure 수집 → buildCases 골격화 → 검수 → 머지 → CI 박제, 정답 자동생성·PII 저장 금지). §6.1 위험에 "검증 통과한 오답 무수집" 행 추가. 리포트 `docs/reports/TAX-028_report.md`. | Claude + 회계사 |
 | 2026-06-10 | 1.9 | **품질 개선 트랙 완결 + Phase 4 코딩 게이트 해제.** TAX-036(골든셋 40건 완성, 2026-06-05), TAX-037~039(비법령 V4 결정 라벨 3단 체인), TAX-042D(V3 라벨 결정 표 + TIER_ALLOWED_LABELS 단일 진실원천), TAX-043(비법령 자연어 정규화), TAX-050(SYSTEM_PROMPT 시점 라벨 결정 트리 — V4 0건 달성), TAX-051(어댑터 후처리 V3 안전망 — T3·T4→🟢 강제 다운그레이드) 완료. vitest 387/387 PASS. **TAX-029 P95 100회 재측정 누적 9.67s ✅ PASS(합격선 15s)** — Phase 3 잔여(골든셋 30건+P95 재측정) 전체 해소. Phase 4(M4, TAX-026-B~) pgvector + OpenAI 임베딩 **코딩 게이트 해제**. §3 현재 상태 표·잔여 작업 갱신. §2 Phase 4 상태 🟡 게이트 해제. §2에 "품질 개선 트랙" 행 신설. 리포트 `docs/reports/TAX-051_report.md`. | Claude + 회계사 |
 | 2026-06-10 | 2.1 | **Phase 5(판례·예규 적재) 완결 반영.** TAX-052~055 전체 완료(2026-06-10): collectNonlaw.ts 수집 파이프라인(5세목 18키워드) → 비법령 89건 임베딩 적재(DB 합계 127건: 법령34+심판례86+해석례4+판례3, embed.ts BATCH_SIZE 버그픽) → 벡터 fallback 비법령 통합테스트 12건 → G-2 골든셋 30건(시드→AI summary 초안→회계사 검수→`golden_direct.json` 머지 40→66건). **G-2 라벨 정확도 30/30=100% (합격선 ≥95% 충족)**, golden:status 66건 V1~V6 전체 PASS, vitest 437/437. 계획상 `golden_similar.json` 별도 파일 대신 `golden_direct.json` 통합(동일 러너·status 재사용). draft 파일 삭제로 status 이중 집계 해소. §2 Phase 5 섹션 ⬜→✅, §3 현재 상태 표·잔여 작업, §5 의존성 그래프 갱신. Phase 6A 착수 가능. 리포트 `docs/reports/TAX-052_report.md`~`TAX-055_report.md`. | Claude + 회계사 |
+| 2026-06-11 | 2.2 | **TAX-056 베타 접근 게이트 완결 + E2E 인증 셋업 추가.** TAX-056: proxy.ts(Edge 경비원, HMAC-SHA256 세션 서명·검증, 30일 쿠키) + login/logout API + SSOT §1.3 베타 접근 제어 명시. Vercel Production 배포 완료(`https://tax-search-system.vercel.app`), 로그인 실동작 확인. E2E 인증 셋업: TAX-056 베타 게이트로 Playwright G-1~G-5가 `/login` 리다이렉트되던 문제 해결 — `auth.setup.ts`(page.evaluate fetch+credentials:include → storageState) + `playwright.config.ts`(.env.local 파싱 + setup→chromium 의존성) + `.gitignore`(`.auth/`). vitest 450/450 · Playwright 6/6 PASS. §3 현재 상태·잔여 갱신. | Claude + 회계사 |
 | 2026-06-10 | 2.0 | **Phase 4(벡터 DB) 완결 반영.** TAX-026-B~H 전체 완료(2026-06-10): 코드 구현(B~G) + Neon pgvector 실연결 + `taxlaw_embeddings` 마이그레이션 + 임베딩 38건 전량 적재 + 운영 벡터 스모크 테스트 ✅ PASS(matchStage=vector 운영 경로 실동작). `.env.example` `DATABASE_URL=` 주석 해제 완료. vitest 387/387. §2 Phase 4 섹션 상태 🟡→✅ + 산출물·검증 체크박스 갱신. §5 의존성 그래프 Phase 4 ⬜→✅. §3 현재 상태 표·잔여 작업 갱신. Phase 5 착수 가능. 리포트 `docs/reports/TAX-026-H_report.md`. | Claude + 회계사 |
 
 ---

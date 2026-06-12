@@ -16,4 +16,12 @@ export interface SearchQuery {
    * 부여되지 않으면 어댑터는 기존 동작(모든 조문 반환) — 회귀 무영향.
    */
   articleNumberHint?: string
+  /**
+   * 과거 시점 기준 날짜 (FR-15, TAX-6A-4) — 선택.
+   *
+   * 설정 시 어댑터는 해당 날짜에 시행 중이던 조문만 반환한다
+   * (조문시행일자 ≤ targetDate 클라이언트 필터 — Gate B, TAX-6A-1 진단 확정).
+   * 미설정이면 현행 기준 (기존 동작 유지, 회귀 무영향).
+   */
+  targetDate?: Date
 }

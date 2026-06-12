@@ -1,16 +1,17 @@
 /** 도메인 에러 코드 */
 export type ErrorCode =
-  | 'E-PII-DETECTED'      // 주민번호·사업자번호 감지 → 입력 거부 (CLAUDE.md §7)
-  | 'E-API-TIMEOUT'       // 외부 API 응답 시간 초과 (5초)
-  | 'E-API-UNAVAILABLE'   // 외부 API 서비스 불가
-  | 'E-LLM-TIMEOUT'       // Gemini API 응답 시간 초과
-  | 'E-LLM-UNAVAILABLE'   // Gemini API 서비스 불가
-  | 'E-LLM-SCHEMA'        // LLM 구조화 출력의 Zod 검증 실패 (TAX-042A 진단 인프라)
-  | 'E-LLM-NETWORK'       // LLM 네트워크/서버 오류 (5xx·ECONNRESET 등, TAX-042A)
-  | 'E-LLM-RATELIMIT'     // LLM 호출 요청량 초과 (HTTP 429, TAX-042A)
-  | 'E-LLM-EMPTY'         // LLM 응답이 빈/잘린 상태 — citations=0 AND summary 공백 (TAX-042C 보강 A)
-  | 'E-VERIFY-FAIL'       // law-verifier V1~V6 실패 (Phase 3 이후)
-  | 'INTERNAL_ERROR'      // 내부 예기치 않은 오류
+  | 'E-PII-DETECTED'          // 주민번호·사업자번호 감지 → 입력 거부 (CLAUDE.md §7)
+  | 'E-API-TIMEOUT'           // 외부 API 응답 시간 초과 (5초)
+  | 'E-API-UNAVAILABLE'       // 외부 API 서비스 불가
+  | 'E-LLM-TIMEOUT'           // Gemini API 응답 시간 초과
+  | 'E-LLM-UNAVAILABLE'       // Gemini API 서비스 불가
+  | 'E-LLM-SCHEMA'            // LLM 구조화 출력의 Zod 검증 실패 (TAX-042A 진단 인프라)
+  | 'E-LLM-NETWORK'           // LLM 네트워크/서버 오류 (5xx·ECONNRESET 등, TAX-042A)
+  | 'E-LLM-RATELIMIT'         // LLM 호출 요청량 초과 (HTTP 429, TAX-042A)
+  | 'E-LLM-EMPTY'             // LLM 응답이 빈/잘린 상태 — citations=0 AND summary 공백 (TAX-042C 보강 A)
+  | 'E-VERIFY-FAIL'           // law-verifier V1~V6 실패 (Phase 3 이후)
+  | 'E-TEMPORAL-AMBIGUOUS'    // 시점 모호 표현 감지 — 회계사에게 날짜 지정 요청 (CLAUDE.md §6.2, TAX-6A-5)
+  | 'INTERNAL_ERROR'          // 내부 예기치 않은 오류
 
 export class AppError extends Error {
   constructor(

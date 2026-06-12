@@ -456,7 +456,9 @@ export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
 
   async search(query: SearchQuery): Promise<SearchResult> {
     // TAX-049: articleNumberHint를 캐시 키에 포함 — 같은 법령의 다른 조문 힌트는 다른 결과
-    const cacheKey = `${query.keyword.trim().toLowerCase()}|${query.articleNumberHint ?? ''}`
+    // TAX-6A-4: targetDate를 캐시 키에 포함 — 같은 법령의 다른 시점은 다른 결과
+    const targetDateKey = query.targetDate ? query.targetDate.toISOString().slice(0, 10) : ''
+    const cacheKey = `${query.keyword.trim().toLowerCase()}|${query.articleNumberHint ?? ''}|${targetDateKey}`
 
     const cached = cache.get(cacheKey)
     if (cached && cached.expiresAt > Date.now()) {
@@ -470,13 +472,13 @@ export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
     //   - 외부 API 호출 수 감소(5→1) → P95 부담 완화
     let items: TaxLaw[]
     if (query.articleNumberHint) {
-      const lawResult = await this.fetchArticles(query.keyword, query.articleNumberHint)
+      const lawResult = await this.fetchArticles(query.keyword, query.articleNumberHint, query.targetDate)
       items = lawResult.items
     } else {
       // 법령 + 법제처 해석례 + 국세청 해석 + 조세심판원 결정례 + 판례 병렬 검색
       //  비법령 검색 실패 시 빈 배열 폴백(부분 실패 허용)
       const [lawResult, interpItems, ntsItems, tribunalItems, precItems] = await Promise.all([
-        this.fetchArticles(query.keyword),
+        this.fetchArticles(query.keyword, undefined, query.targetDate),
         this.searchInterpretations(query.keyword).catch(() => [] as TaxLaw[]),
         this.searchNtsInterpretations(query.keyword).catch(() => [] as TaxLaw[]),
         this.searchTribunal(query.keyword).catch(() => [] as TaxLaw[]),
@@ -548,8 +550,9 @@ export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
    *
    * @param keyword             정식 법령명(예: "소득세법") — 약칭은 정규화됨
    * @param articleNumberHint   (TAX-049) 부여 시 해당 조문번호와 일치하는 조문만 반환
+   * @param targetDate          (TAX-6A-4) 과거 시점 기준 날짜 — 조문시행일자 ≤ targetDate 필터
    */
-  private async fetchArticles(keyword: string, articleNumberHint?: string): Promise<SearchResult> {
+  private async fetchArticles(keyword: string, articleNumberHint?: string, targetDate?: Date): Promise<SearchResult> {
     // TAX-031: 약칭을 정식 법령명으로 정규화한 뒤 검색 (예: "상증세법" → "상속세 및 증여세법")
     const normalized = normalizeLawName(keyword)
     const laws = await this.searchLaws(normalized)
@@ -592,9 +595,19 @@ export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
     // TAX-049: 조문번호 힌트가 주어지면 해당 조문만 필터(예: "제70조").
     //   회계사 사전(`articleNumberHints.ts`)이 제공하는 결정론적 힌트로 T1 정확 추출.
     //   힌트가 없으면 기존 동작(법령 전체 조문 반환) 유지 — 무영향.
-    const filtered = articleNumberHint
+    const hinted = articleNumberHint
       ? items.filter((it) => it.articleNumber === articleNumberHint)
       : items
+
+    // FR-15 시점 필터 (TAX-6A-4): targetDate 지정 시 해당 날짜 이전에 시행된 조문만 반환.
+    //   조문시행일자 ≤ targetDate — 클라이언트 필터(Gate B, TAX-6A-1 진단: API 미지원 확정).
+    //   미지정 시 기존 동작(현행 전체 조문 반환) 유지 — 회귀 무영향.
+    const targetYmd = targetDate
+      ? targetDate.toISOString().slice(0, 10).replace(/-/g, '')  // "YYYY-MM-DD" → "YYYYMMDD"
+      : null
+    const filtered = targetYmd
+      ? hinted.filter((it) => !it.revisionDate || it.revisionDate.replace(/-/g, '') <= targetYmd)
+      : hinted
 
     return {
       items: sortTaxLaws(filtered),

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
+import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { LawVerifierAdapter } from '@/adapters/lawVerifier'
 import type { LabeledAnswer } from '@/domain/LabeledAnswer'
@@ -13,7 +13,7 @@ interface GoldenCase {
   question: string
   sourceLaws: TaxLaw[]
   answer: LabeledAnswer
-  expectedStatus: 'PASS' | 'FAIL'
+  expectedStatus: 'PASS' | 'FAIL' | ''
 }
 
 interface GoldenSet {
@@ -21,15 +21,34 @@ interface GoldenSet {
   cases: GoldenCase[]
 }
 
-const goldenPath = join(process.cwd(), 'eval', 'golden_direct.json')
-const goldenSet: GoldenSet = JSON.parse(readFileSync(goldenPath, 'utf-8'))
+// G-1·G-2: 법령·비법령 직접 검증 골든셋
+const directPath = join(process.cwd(), 'eval', 'golden_direct.json')
+const directSet: GoldenSet = JSON.parse(readFileSync(directPath, 'utf-8'))
+
+// G-3: 시점 검색 골든셋 — expectedStatus가 채워진 케이스만 포함(회계사 검수 전 골격 제외)
+const temporalPath = join(process.cwd(), 'eval', 'golden_temporal.json')
+const temporalCases: GoldenCase[] = existsSync(temporalPath)
+  ? (JSON.parse(readFileSync(temporalPath, 'utf-8')) as GoldenSet).cases.filter(
+      (c) => c.expectedStatus === 'PASS' || c.expectedStatus === 'FAIL'
+    )
+  : []
+
+// G-4: 환각 유발 골든셋 — expectedStatus가 채워진 케이스만 포함
+const hallucinationPath = join(process.cwd(), 'eval', 'golden_hallucination.json')
+const hallucinationCases: GoldenCase[] = existsSync(hallucinationPath)
+  ? (JSON.parse(readFileSync(hallucinationPath, 'utf-8')) as GoldenSet).cases.filter(
+      (c) => c.expectedStatus === 'PASS' || c.expectedStatus === 'FAIL'
+    )
+  : []
+
+const allCases: GoldenCase[] = [...directSet.cases, ...temporalCases, ...hallucinationCases]
 
 // ─── 테스트 ──────────────────────────────────────────────────────────────────
 
 describe('골든셋 V1~V6 직접 검증 (실제 API 없음)', () => {
   const verifier = new LawVerifierAdapter()
 
-  for (const tc of goldenSet.cases) {
+  for (const tc of allCases) {
     it(`[${tc.id}] ${tc.description}`, async () => {
       const result = await verifier.verify(tc.answer, tc.sourceLaws)
 

@@ -10,29 +10,39 @@ interface DbRow {
   case_number: string | null
   article_title: string | null
   content: string
-  revision_date: string | null
-  enforcement_date: string | null
+  // DATE 컬럼은 pg 드라이버가 JS Date 객체로 반환한다 — 도메인 TaxLaw는 문자열을
+  // 기대하므로 toIsoDateString으로 정규화해야 한다 (BUG: localeCompare 크래시 방지)
+  revision_date: string | Date | null
+  enforcement_date: string | Date | null
   source_url: string
   trust_tier: string
   issuing_body: string | null
-  decision_date: string | null
+  decision_date: string | Date | null
   similarity: number
 }
 
+/** pg DATE 컬럼 값(Date 객체 또는 문자열)을 'YYYY-MM-DD' 문자열로 정규화 */
+function toIsoDateString(value: string | Date | null): string {
+  if (value == null) return ''
+  if (value instanceof Date) return value.toISOString().slice(0, 10)
+  return value
+}
+
 function rowToTaxLaw(row: DbRow): TaxLaw {
+  const decisionDate = toIsoDateString(row.decision_date)
   return {
     sourceType: row.source_type as SourceType,
     lawName: row.law_name,
     articleNumber: row.article_number ?? '',
     articleTitle: row.article_title ?? '',
     content: row.content,
-    revisionDate: row.revision_date ?? '',
-    enforcementDate: row.enforcement_date ?? '',
+    revisionDate: toIsoDateString(row.revision_date),
+    enforcementDate: toIsoDateString(row.enforcement_date),
     sourceUrl: row.source_url,
     trustTier: row.trust_tier as TrustTier,
-    ...(row.case_number   ? { caseNumber:   row.case_number }   : {}),
-    ...(row.issuing_body  ? { issuingBody:  row.issuing_body }  : {}),
-    ...(row.decision_date ? { decisionDate: row.decision_date } : {}),
+    ...(row.case_number  ? { caseNumber:  row.case_number }  : {}),
+    ...(row.issuing_body ? { issuingBody: row.issuing_body } : {}),
+    ...(decisionDate     ? { decisionDate }                  : {}),
   }
 }
 

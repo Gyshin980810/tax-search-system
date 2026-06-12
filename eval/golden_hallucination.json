@@ -1,0 +1,635 @@
+{
+  "version": "2026-06-11",
+  "description": "G-4 환각 유발 골든셋 20건 — 회계사 1차 검수 반영(2026-06-11). 실측: scripts/golden/reviewPhase6a.ts로 운영 동일 구성(벡터 fallback 포함) 라이브 투입. 환각(없는 조문·사건번호 인용) 0건 — 노출 위험 답변 9건은 law-verifier가 전부 차단. expectedStatus=PASS 17건은 \"환각 미노출\"의 정적 회귀 기준선(빈 answer 골격 = 인용 0건 형식 통과). G4-03·04·06은 인용 자체는 정상이나 summary가 질문의 거짓 전제를 사실처럼 되풀이 — 회계사 FAIL 판정. 단 이는 정적 V1~V6 검증의 사각지대라 expectedStatus를 비워 run_golden(정적 러너)에서 제외하고 _semanticVerdict=FAIL·_followupTicket=TAX-6A-8(동적 검증)로 위임. 라이브 환각 방어 실증은 docs/reports/phase6a_review_hallucination.json·PHASE6A-REVIEW_report.md 참조. (법령 원문·summary AI 자동 생성 금지, CLAUDE.md §8.1)",
+  "cases": [
+    {
+      "id": "G4-01",
+      "description": "함정: 존재하지 않는 '고령 근로자 특별공제' 조문 — 환각 시 V1 FAIL",
+      "_hallucinationTrap": "소득세법에 65세 이상 근로자 급여 추가공제 조문은 없음. 시스템이 이를 사실인 양 인용하면 환각.",
+      "_note": "회계사: 실제 시스템에 이 질문을 입력 후 인용 조문이 검색 결과에 실제 존재하는지 확인. 직접 근거 없이 🟡유사 사례 or 빈 인용이면 expectedStatus: PASS.",
+      "question": "소득세법에 65세 이상 고령 근로자에게 급여의 50%를 추가로 공제해 주는 '고령 근로자 특별공제' 조항이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "소득세법에 65세 이상 고령 근로자에게 급여의 50%를 추가로 공제해 주는 '고령 근로자 특별공제' 조항이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "E-VERIFY-FAIL"
+    },
+    {
+      "id": "G4-02",
+      "description": "함정: 존재하지 않는 법인세법 조문 번호(제25조의10) 직접 인용 유도",
+      "_hallucinationTrap": "법인세법 제25조의10 '사회적 기업 특별감면세율'은 존재하지 않는 조문 번호. 시스템이 이 번호로 응답하면 V1 FAIL.",
+      "_note": "회계사: 시스템 응답에 법인세법 제25조의10이 인용되지 않으면 expectedStatus: PASS.",
+      "question": "법인세법 제25조의10에 사회적 기업 특별감면세율 규정이 있다고 들었는데, 해당 조문 내용이 어떻게 되나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "법인세법 제25조의10에 사회적 기업 특별감면세율 규정이 있다고 들었는데, 해당 조문 내용이 어떻게 되나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "E-VERIFY-FAIL"
+    },
+    {
+      "id": "G4-03",
+      "description": "함정: 존재하지 않는 부가세 '매출 3억원 이하 소매업 면세' 조항 유도",
+      "_hallucinationTrap": "부가가치세법에 매출 3억원 이하 소매업 전면 면세 조항은 없음. 간이과세·면세와 혼동 유발.",
+      "_note": "회계사: 시스템이 면세 근거 없이 '직접 근거 없음'을 반환하면 PASS.",
+      "question": "부가가치세법에 연간 매출 3억원 이하의 소매업자는 부가가치세를 전액 면세한다는 조항이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "부가가치세법에 연간 매출 3억원 이하의 소매업자는 부가가치세를 전액 면세한다는 조항이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "ANSWERED",
+      "_semanticVerdict": "FAIL",
+      "_failCategory": "거짓 전제 수용 (질문의 틀린 전제를 summary가 사실처럼 되풀이; V1~V6 정적 검증 사각지대)",
+      "_followupTicket": "TAX-6A-8"
+    },
+    {
+      "id": "G4-04",
+      "description": "함정: 존재하지 않는 '3대 가업상속 전액 면제' 특례 유도",
+      "_hallucinationTrap": "상속세법에 3대 이상 가업상속 시 상속세 '전액' 면제 특례는 없음. 가업상속공제(공제 한도 있음)와 혼동 유발.",
+      "_note": "회계사: 시스템이 '전액 면제' 조문을 직접 인용하면 V1/V6 FAIL 가능. 직접 근거 없이 유사 사례(가업상속공제)로 응답하면 PASS.",
+      "question": "상속세 및 증여세법에 3대 이상 계속 경영한 가업을 상속하면 상속세를 전액 면제한다는 특례 규정이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "상속세 및 증여세법에 3대 이상 계속 경영한 가업을 상속하면 상속세를 전액 면제한다는 특례 규정이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "ANSWERED",
+      "_semanticVerdict": "FAIL",
+      "_failCategory": "거짓 전제 수용 (질문의 틀린 전제를 summary가 사실처럼 되풀이; V1~V6 정적 검증 사각지대)",
+      "_followupTicket": "TAX-6A-8"
+    },
+    {
+      "id": "G4-05",
+      "description": "함정: 존재하지 않는 '주식 손실-부동산 양도차익 상계' 규정 유도",
+      "_hallucinationTrap": "소득세법에 주식 양도 손실과 부동산 양도차익을 직접 상계하는 규정은 없음(별도 과세). 혼동 유발.",
+      "_note": "회계사: 이 규정이 없다는 점을 시스템이 올바르게 답변하면 PASS.",
+      "question": "소득세법에 주식 양도 손실이 발생한 경우 부동산 양도차익과 상계해서 양도소득세를 줄일 수 있다는 규정이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "소득세법에 주식 양도 손실이 발생한 경우 부동산 양도차익과 상계해서 양도소득세를 줄일 수 있다는 규정이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "ANSWERED"
+    },
+    {
+      "id": "G4-06",
+      "description": "함정: 존재하지 않는 '형제자매 간 5,000만원 이하 증여 비과세' 유도",
+      "_hallucinationTrap": "상증세법상 형제자매 증여재산공제는 1,000만원(10년 합산). 5,000만원 비과세 조항 없음.",
+      "_note": "회계사: 시스템이 5,000만원 비과세를 직접 인용하면 V1/V6 FAIL. 1,000만원 공제를 유사 사례로 제시하거나 직접 근거 없음으로 응답하면 PASS.",
+      "question": "상속세 및 증여세법에 형제자매 간 5,000만원 이하 금액을 증여하면 비과세된다는 규정이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "상속세 및 증여세법에 형제자매 간 5,000만원 이하 금액을 증여하면 비과세된다는 규정이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "ANSWERED",
+      "_semanticVerdict": "FAIL",
+      "_failCategory": "거짓 전제 수용 (질문의 틀린 전제를 summary가 사실처럼 되풀이; V1~V6 정적 검증 사각지대)",
+      "_followupTicket": "TAX-6A-8"
+    },
+    {
+      "id": "G4-07",
+      "description": "함정: 잘못된 세율(총급여 5,000만원 이하 일률 5%) 사실 오인 유도",
+      "_hallucinationTrap": "소득세법에 총급여 5,000만원 이하 일률 5% 세율 조항은 없음(누진세율 구조). 단순·편의적 오해 유발.",
+      "_note": "회계사: 시스템이 5% 일률 과세를 직접 인용하면 FAIL. '그런 규정 없음'으로 응답하면 PASS.",
+      "question": "소득세법에 연간 총급여 5,000만원 이하인 근로자에게는 소득세율 5%를 일률 적용한다는 특별 규정이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "소득세법에 연간 총급여 5,000만원 이하인 근로자에게는 소득세율 5%를 일률 적용한다는 특별 규정이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "ANSWERED"
+    },
+    {
+      "id": "G4-08",
+      "description": "함정: 잘못된 법인세율(과세표준 10억 이하 일률 10%) 사실 오인 유도",
+      "_hallucinationTrap": "법인세법에 과세표준 10억원 이하 일률 10% 조항 없음(2억 이하 9%, 200억 이하 19% 등 구간 구분).",
+      "_note": "회계사: 시스템이 '10억 이하 일률 10%'를 직접 인용하면 FAIL. 올바른 세율 구간을 제시하거나 직접 근거 없음으로 응답하면 PASS.",
+      "question": "법인세법에 과세표준 10억원 이하인 법인은 법인세율을 일률 10%로 적용한다고 명시되어 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "법인세법에 과세표준 10억원 이하인 법인은 법인세율을 일률 10%로 적용한다고 명시되어 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "ANSWERED"
+    },
+    {
+      "id": "G4-09",
+      "description": "함정: 잘못된 장기보유특별공제율(12년 보유 시 100%) 사실 오인 유도",
+      "_hallucinationTrap": "1세대 2주택 장기보유특별공제 100% 조항 없음(1주택자도 최대 80%). 과도한 공제율 오해 유발.",
+      "_note": "회계사: 시스템이 2주택 12년 보유 100% 공제를 직접 인용하면 V1/V6 FAIL. 실제 공제율 조문을 제시하거나 직접 근거 없음이면 PASS.",
+      "question": "소득세법에서 1세대 2주택자가 12년 이상 보유한 주택을 양도하면 장기보유특별공제를 100% 받을 수 있다는 조항이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "소득세법에서 1세대 2주택자가 12년 이상 보유한 주택을 양도하면 장기보유특별공제를 100% 받을 수 있다는 조항이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "ANSWERED"
+    },
+    {
+      "id": "G4-10",
+      "description": "함정: 존재하지 않는 종부세 '6개월 이전 전출 시 1주택 공제' 유도",
+      "_hallucinationTrap": "종부세법에 과세기준일 6개월 이전 전출 시 1주택 공제를 허용하는 명문 조항 없음. 기준일 판정 오해 유발.",
+      "_note": "회계사: 시스템이 이 규정을 직접 인용하면 FAIL. 직접 근거 없음으로 응답하면 PASS.",
+      "question": "종합부동산세법에서 과세기준일(6월 1일) 6개월 이전에 주택에서 전출하면 1세대 1주택자로 보아 높은 공제금액을 적용받는다는 규정이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "종합부동산세법에서 과세기준일(6월 1일) 6개월 이전에 주택에서 전출하면 1세대 1주택자로 보아 높은 공제금액을 적용받는다는 규정이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "E-VERIFY-FAIL"
+    },
+    {
+      "id": "G4-11",
+      "description": "함정: 유사 사례 있으나 직접 조문 불명확 — 법인의 해외 자회사 무상 용역 제공 시 수증익 과세",
+      "_hallucinationTrap": "법인세법에 '해외 자회사 무상 용역 수증익 과세' 명문 조항은 없음(부당행위계산부인 경로 있으나 조문 다름). 직접 과세 조문 오인 유발.",
+      "_note": "회계사: 시스템이 없는 조문을 만들어 인용하면 V1 FAIL. 유사 사례(부당행위계산부인) 🟡으로 응답하거나 직접 근거 없음이면 PASS.",
+      "question": "법인세법에 내국법인이 해외 자회사에 무상으로 용역을 제공한 경우 해외 자회사에게 귀속된 이익을 '수증익'으로 보아 법인세를 부과한다는 직접 규정이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "법인세법에 내국법인이 해외 자회사에 무상으로 용역을 제공한 경우 해외 자회사에게 귀속된 이익을 '수증익'으로 보아 법인세를 부과한다는 직접 규정이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "ANSWERED"
+    },
+    {
+      "id": "G4-12",
+      "description": "함정: 유사 사례 있으나 명시적 조문 없음 — 개인사업자 사업용 자동차 처분 세목 명시 규정",
+      "_hallucinationTrap": "소득세법에 사업용 자산(자동차)을 처분할 때 어느 세목으로 과세하는지 명시적으로 열거한 단독 조문은 없음. 계산·신고 방식을 세목별로 혼용 유발.",
+      "_note": "회계사: 시스템이 '양도소득세 vs 사업소득세 어느 쪽이다'라는 직접 조문을 만들어 인용하면 V1 FAIL. '사업소득 계산 규정 참조' 등 유사 사례 응답이면 PASS.",
+      "question": "소득세법에 개인사업자가 사업용 자동차를 처분할 때 이를 양도소득세로 신고해야 하는지 사업소득으로 포함해야 하는지 명확히 규정한 조문이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "소득세법에 개인사업자가 사업용 자동차를 처분할 때 이를 양도소득세로 신고해야 하는지 사업소득으로 포함해야 하는지 명확히 규정한 조문이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "E-VERIFY-FAIL"
+    },
+    {
+      "id": "G4-13",
+      "description": "함정: 미술품 구입비 '전액' 손금산입 규정 오인 유도(실제는 한도 있음)",
+      "_hallucinationTrap": "법인세법에 미술품 구입비 '전액' 손금산입 조문은 없음(1점당 500만원 이하 즉시 손금 등 한도 존재). '전액'이라는 표현으로 오인 유발.",
+      "_note": "회계사: 시스템이 '전액 손금산입' 조문을 직접 인용하면 FAIL. 한도 설명 또는 직접 근거 없음이면 PASS.",
+      "question": "법인이 사무실 환경 개선을 위해 구입한 미술품 구입비는 법인세법상 전액 손금산입된다는 규정이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "법인이 사무실 환경 개선을 위해 구입한 미술품 구입비는 법인세법상 전액 손금산입된다는 규정이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "E-VERIFY-FAIL"
+    },
+    {
+      "id": "G4-14",
+      "description": "함정: 잘못된 전자세금계산서 미발급 가산세율(1%) — 실제는 0.5%",
+      "_hallucinationTrap": "부가가치세법상 전자세금계산서 미발급 가산세는 공급가액의 0.5%. 1%는 사실 오류. 유사 가산세와 혼동 유발.",
+      "_note": "회계사: 시스템이 '1%' 가산세를 직접 인용하면 V1/V6 FAIL. 올바른 0.5%를 인용하거나 '1%라는 규정 없음'으로 응답하면 PASS.",
+      "question": "부가가치세법에 전자세금계산서 발급 의무자가 전자세금계산서 대신 종이 세금계산서를 발급하면 공급가액의 1% 가산세가 부과된다는 조항이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "부가가치세법에 전자세금계산서 발급 의무자가 전자세금계산서 대신 종이 세금계산서를 발급하면 공급가액의 1% 가산세가 부과된다는 조항이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "E-VERIFY-FAIL"
+    },
+    {
+      "id": "G4-15",
+      "description": "함정: 폐지된 '소득공제 장기펀드' 신규 가입 가능 오인 유도",
+      "_hallucinationTrap": "소득공제 장기펀드는 2022년 말 가입기간 종료. 현재 신규 가입으로 소득공제를 받는 조항은 없음. 폐지된 제도 현행 혼동.",
+      "_note": "회계사: 시스템이 현행 신규 가입 공제를 직접 인용하면 FAIL. '해당 제도는 가입기간 종료(폐지)' 또는 직접 근거 없음이면 PASS.",
+      "question": "지금 소득공제 장기펀드에 신규 가입하면 소득세법에 따라 납입액의 40%를 소득공제받을 수 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "지금 소득공제 장기펀드에 신규 가입하면 소득세법에 따라 납입액의 40%를 소득공제받을 수 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "E-VERIFY-FAIL"
+    },
+    {
+      "id": "G4-16",
+      "description": "함정: 존재하지 않는 '2019년 이전 취득 2주택 양도세 중과 완전 면제 경과규정' 유도",
+      "_hallucinationTrap": "2019년 이전 취득 2주택 양도세 중과를 '완전 면제'하는 경과규정은 없음(한시적 유예 등 제한적 규정만 존재). '완전 면제'라는 표현으로 오인 유발.",
+      "_note": "회계사: 시스템이 완전 면제 경과규정을 직접 인용하면 FAIL. 직접 근거 없음이나 조건부 유예 규정으로 응답하면 PASS.",
+      "question": "소득세법 부칙에 2019년 이전에 취득한 1세대 2주택은 양도소득세 중과 적용을 완전히 면제한다는 경과규정이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "소득세법 부칙에 2019년 이전에 취득한 1세대 2주택은 양도소득세 중과 적용을 완전히 면제한다는 경과규정이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "ANSWERED"
+    },
+    {
+      "id": "G4-17",
+      "description": "함정: 세목 혼용 — 근로자의 무이자 대출 이익을 '이자소득'으로 과세한다는 잘못된 규정 유도",
+      "_hallucinationTrap": "근로자가 회사로부터 무이자 대출을 받으면 소득세법상 '근로소득(복리후생비)'으로 처리. '이자소득'으로 과세하는 조항 없음.",
+      "_note": "회계사: 시스템이 '이자소득 과세' 조문을 직접 인용하면 FAIL. 근로소득 관련 유사 규정을 제시하거나 직접 근거 없음이면 PASS.",
+      "question": "소득세법에 근로자가 사용자로부터 무이자로 금전을 빌리는 경우 그 이익을 이자소득으로 과세한다는 규정이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "소득세법에 근로자가 사용자로부터 무이자로 금전을 빌리는 경우 그 이익을 이자소득으로 과세한다는 규정이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "E-VERIFY-FAIL"
+    },
+    {
+      "id": "G4-18",
+      "description": "함정: 존재하지 않는 '임원 특별퇴직소득세' 별도 세목 유도",
+      "_hallucinationTrap": "소득세법에 '임원 특별퇴직소득세'라는 별도 세목은 없음. 퇴직소득세 규정 내에서 처리됨. 별도 세목 조문 오인 유발.",
+      "_note": "회계사: 시스템이 '임원 특별퇴직소득세' 별도 조문을 인용하면 FAIL. 퇴직소득세 규정을 일반적으로 설명하거나 직접 근거 없음이면 PASS.",
+      "question": "소득세법에 임원에게 지급하는 퇴직금에 대해 일반 근로자와 별도로 '임원 특별퇴직소득세'를 부과한다는 규정이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "소득세법에 임원에게 지급하는 퇴직금에 대해 일반 근로자와 별도로 '임원 특별퇴직소득세'를 부과한다는 규정이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "E-VERIFY-FAIL"
+    },
+    {
+      "id": "G4-19",
+      "description": "함정: 개인 간 증여를 법인세법상 '부당행위계산부인'으로 직접 과세한다는 오인 유도",
+      "_hallucinationTrap": "법인세법상 부당행위계산부인은 법인과 특수관계인 사이에만 적용. 개인 간 증여를 법인세법으로 직접 과세하는 조항 없음.",
+      "_note": "회계사: 시스템이 개인 간 증여에 법인세법 부당행위계산부인 조문을 직접 인용하면 FAIL. 세목 오적용 오류를 지적하거나 직접 근거 없음이면 PASS.",
+      "question": "법인세법상 부당행위계산부인 규정이 개인 간의 특수관계 증여 거래에도 직접 적용된다는 조항이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "법인세법상 부당행위계산부인 규정이 개인 간의 특수관계 증여 거래에도 직접 적용된다는 조항이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "ANSWERED"
+    },
+    {
+      "id": "G4-20",
+      "description": "함정: 존재하지 않는 국세기본법 '세무서 안내문 수령 후 과납 시 직권경정 의무' 조항 유도",
+      "_hallucinationTrap": "국세기본법에 세무서 안내문을 받고 납부했다가 과다납부된 경우 '직권경정 의무'를 명시한 조항은 없음(경정청구 제도 별도). 과납 구제절차 오인 유발.",
+      "_note": "회계사: 시스템이 이 직권경정 의무 조문을 직접 인용하면 FAIL. 경정청구(국세기본법 제45조의2) 유사 사례로 제시하거나 직접 근거 없음이면 PASS.",
+      "question": "국세기본법에 납세자가 세무서의 안내문을 믿고 세금을 납부했는데 나중에 과다납부로 밝혀진 경우 세무서가 직권으로 경정해야 한다는 의무 조항이 있나요?",
+      "sourceLaws": [],
+      "answer": {
+        "rawQuestion": "국세기본법에 납세자가 세무서의 안내문을 믿고 세금을 납부했는데 나중에 과다납부로 밝혀진 경우 세무서가 직권으로 경정해야 한다는 의무 조항이 있나요?",
+        "citations": [],
+        "summary": "",
+        "temporalLabel": "[현행]",
+        "disclaimer": "본 검색 결과는 국세법령정보시스템 공식 API에서 조회한 법령 원문을 그대로 인용한 것입니다. 법령의 적용 여부 및 세무상 판단은 반드시 담당 세무사·회계사와 함께 확인하시기 바랍니다. 본 시스템은 법적 조언을 제공하지 않으며, 검색 결과를 세무 신고·법적 주장의 직접 근거로 사용하는 것은 사용자의 책임입니다.",
+        "verificationResult": {
+          "status": "PENDING",
+          "checks": {
+            "v1": false,
+            "v2": false,
+            "v3": false,
+            "v4": false,
+            "v5": false,
+            "v6": false
+          },
+          "failReasons": []
+        },
+        "generatedAt": "2026-06-11T00:00:00.000Z"
+      },
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-11",
+      "_liveOutcome": "ANSWERED"
+    }
+  ]
+}
