@@ -91,12 +91,11 @@
         },
         "generatedAt": "2026-06-11T00:00:00.000Z"
       },
-      "expectedStatus": "",
-      "_reviewedAt": "2026-06-11",
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-14",
       "_liveOutcome": "ANSWERED",
-      "_semanticVerdict": "FAIL",
-      "_failCategory": "거짓 전제 수용 (질문의 틀린 전제를 summary가 사실처럼 되풀이; V1~V6 정적 검증 사각지대)",
-      "_followupTicket": "TAX-6A-8"
+      "_semanticVerdict": "PASS",
+      "_fixedBy": "TAX-6A-8 (SYSTEM_PROMPT 전제 검증 지침)"
     },
     {
       "id": "G4-04",
@@ -125,12 +124,11 @@
         },
         "generatedAt": "2026-06-11T00:00:00.000Z"
       },
-      "expectedStatus": "",
-      "_reviewedAt": "2026-06-11",
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-14",
       "_liveOutcome": "ANSWERED",
-      "_semanticVerdict": "FAIL",
-      "_failCategory": "거짓 전제 수용 (질문의 틀린 전제를 summary가 사실처럼 되풀이; V1~V6 정적 검증 사각지대)",
-      "_followupTicket": "TAX-6A-8"
+      "_semanticVerdict": "PASS",
+      "_fixedBy": "TAX-6A-8 (SYSTEM_PROMPT 전제 검증 지침)"
     },
     {
       "id": "G4-05",
@@ -190,12 +188,11 @@
         },
         "generatedAt": "2026-06-11T00:00:00.000Z"
       },
-      "expectedStatus": "",
-      "_reviewedAt": "2026-06-11",
-      "_liveOutcome": "ANSWERED",
-      "_semanticVerdict": "FAIL",
-      "_failCategory": "거짓 전제 수용 (질문의 틀린 전제를 summary가 사실처럼 되풀이; V1~V6 정적 검증 사각지대)",
-      "_followupTicket": "TAX-6A-8"
+      "expectedStatus": "PASS",
+      "_reviewedAt": "2026-06-14",
+      "_liveOutcome": "E-VERIFY-FAIL",
+      "_semanticVerdict": "PASS",
+      "_fixedBy": "TAX-6A-8 (SYSTEM_PROMPT 전제 검증 지침)"
     },
     {
       "id": "G4-07",
