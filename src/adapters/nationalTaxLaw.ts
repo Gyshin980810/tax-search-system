@@ -57,6 +57,16 @@ interface RawArticle {
   항?: RawHang | RawHang[]   // TAX-032: 조문 본문(항·호·목) — content 조립에 사용
 }
 
+// 부칙(附則) 단위 — 법령 본문 응답의 부칙 노드 (TAX-6B-1, FR-17)
+//  프로브(scripts/diagnostics/probe_addenda.mjs)로 필드 확정(2026-06-14):
+//   부칙공포일자=YYYYMMDD, 부칙내용=문자열 또는 중첩 배열(NestedText), 부칙공포번호.
+interface RawBuchik {
+  부칙키?: string
+  부칙공포일자?: string   // YYYYMMDD
+  부칙내용?: NestedText    // 문자열 또는 (경과조치 표 등) 중첩 배열
+  부칙공포번호?: string
+}
+
 interface RawLawService {
   법령: {
     기본정보: {
@@ -67,6 +77,8 @@ interface RawLawService {
       법령ID: string
     }
     조문?: { 조문단위: RawArticle | RawArticle[] }
+    // TAX-6B-1 FR-17: 부칙·경과조치 — 본문 응답에 이미 포함(추가 호출 불필요)
+    부칙?: { 부칙단위: RawBuchik | RawBuchik[] }
   }
 }
 
@@ -320,6 +332,61 @@ function toSourceUrl(lsiSeq: string, efYd: string): string {
   return `${BASE_URL}/lsInfoP.do?efYd=${efYd}&lsiSeq=${lsiSeq}`
 }
 
+/**
+ * 시점 관련 부칙 선별 (TAX-6B-1, FR-17 — 회계사 결정 2026-06-14).
+ *
+ * 한 법령에 부칙이 100개 이상일 수 있어(소득세법 116개) 전부 노출하면 노이즈다.
+ * 신·구법 적용 경계를 보여줄 시점 관련 부칙만 고른다.
+ *  - targetDate 지정: 그 시점 직전 공포 1개(당시 적용된 법) + 직후 공포 1개(다음 개정 경계)
+ *  - 미지정: 최신 공포 2개
+ */
+function selectRelevantAddenda(addenda: RawBuchik[], targetDate?: Date): RawBuchik[] {
+  // 공포일자·내용이 있는 부칙만, 공포일자 내림차순 정렬
+  const sortedDesc = addenda
+    .filter((b) => b.부칙공포일자 && b.부칙내용 != null)
+    .sort((a, b) => (b.부칙공포일자 ?? '').localeCompare(a.부칙공포일자 ?? ''))
+
+  if (!targetDate) return sortedDesc.slice(0, 2) // 최신 2개
+
+  const ymd = targetDate.toISOString().slice(0, 10).replace(/-/g, '') // YYYYMMDD
+  const before = sortedDesc.filter((b) => (b.부칙공포일자 ?? '') <= ymd) // 내림차순 → [0]=직전 최신
+  const after = sortedDesc.filter((b) => (b.부칙공포일자 ?? '') > ymd) // 내림차순 → 마지막=직후 최초
+
+  const picks: RawBuchik[] = []
+  if (before[0]) picks.push(before[0]) // targetDate 직전 부칙
+  if (after.length > 0) picks.push(after[after.length - 1]) // targetDate 직후 부칙
+  return picks
+}
+
+/**
+ * 부칙 1건 → TaxLaw(T2) 매핑 (TAX-6B-1).
+ * content는 원문 그대로 결합(flattenText)하며 의역·요약하지 않는다 (CLAUDE.md §6.1).
+ * 식별자(articleNumber)는 부칙내용 첫 줄("부칙 <제○호,날짜>")을 사용한다.
+ */
+function buchikToTaxLaw(
+  buchik: RawBuchik,
+  lawName: string,
+  lsiSeq: string,
+): TaxLaw {
+  const content = flattenText(buchik.부칙내용)
+  const promulgationDate = toIsoDate(buchik.부칙공포일자 ?? '')
+  const firstLine = content.split('\n')[0]?.trim() ?? ''
+  const articleNumber = firstLine.startsWith('부칙')
+    ? firstLine
+    : `부칙 <제${buchik.부칙공포번호 ?? ''}호>`
+  return {
+    sourceType: '법령',
+    lawName: `${lawName} 부칙`,
+    articleNumber,
+    articleTitle: '부칙',
+    content,
+    revisionDate: promulgationDate,
+    enforcementDate: promulgationDate,
+    sourceUrl: toSourceUrl(lsiSeq, buchik.부칙공포일자 ?? ''),
+    trustTier: 'T2',
+  }
+}
+
 /** API 키 없는 퍼블릭 판례 원문 링크 생성 (CLAUDE.md §7 — OC 키 노출 차단) */
 function toPrecSourceUrl(precSeq: string): string {
   return `${BASE_URL}/precInfoP.do?precSeq=${precSeq}`
@@ -523,7 +590,7 @@ export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
   }
 
   /** Step 2: 특정 법령의 조문 목록 조회 */
-  private async fetchLawArticles(lsiSeq: string): Promise<{ law: RawLawService['법령']; articles: RawArticle[] }> {
+  private async fetchLawArticles(lsiSeq: string): Promise<{ law: RawLawService['법령']; articles: RawArticle[]; addenda: RawBuchik[] }> {
     const params = new URLSearchParams({
       OC: this.apiKey,
       target: 'law',
@@ -535,14 +602,18 @@ export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
 
     const law = data.법령
     if (!law?.기본정보) throw new ApiUnavailableError()
-    if (!law?.조문?.조문단위) return { law, articles: [] }
+
+    // TAX-6B-1 FR-17: 부칙은 본문 응답에 이미 포함 — 단수/복수 혼재 정규화
+    const addenda = law.부칙?.부칙단위 ? toArrayNode(law.부칙.부칙단위) : []
+
+    if (!law?.조문?.조문단위) return { law, articles: [], addenda }
 
     const raw = law.조문.조문단위
     const all = Array.isArray(raw) ? raw : [raw]
 
     // 실제 조문만 필터 (장·절·관 헤더 제외)
     const articles = all.filter(a => a.조문여부 === '조문')
-    return { law, articles }
+    return { law, articles, addenda }
   }
 
   /**
@@ -563,7 +634,7 @@ export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
     //  무조건 laws[0]을 채택하면 오매칭된다. 정식 법령명과 가장 정확히 일치하는 법령을 고른다.
     //  (Phase 4에서 다수 법령·벡터 검색으로 확장)
     const topLaw = selectBestLaw(laws, normalized)!.law // laws.length>0 이므로 non-null
-    const { law: lawDetail, articles } = await this.fetchLawArticles(topLaw.법령일련번호)
+    const { law: lawDetail, articles, addenda } = await this.fetchLawArticles(topLaw.법령일련번호)
 
     const lawType = lawDetail.기본정보.법종구분.content
     const revisionDate = toIsoDate(lawDetail.기본정보.공포일자)
@@ -609,9 +680,17 @@ export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
       ? hinted.filter((it) => !it.revisionDate || it.revisionDate.replace(/-/g, '') <= targetYmd)
       : hinted
 
+    // TAX-6B-1 FR-17: 시점 관련 부칙·경과조치를 T2로 병합 (신·구법 적용 경계 명시).
+    //   법령 단위 맥락이므로 조문번호 힌트 필터와 무관하게 첨부하고, 시점 선별만 적용한다.
+    //   sortTaxLaws가 T1 조문 → T2 부칙 순으로 정렬하여 직접 근거를 우선 노출한다.
+    const addendaItems = selectRelevantAddenda(addenda, targetDate).map((b) =>
+      buchikToTaxLaw(b, lawName, topLaw.법령일련번호),
+    )
+
+    const merged = sortTaxLaws([...filtered, ...addendaItems])
     return {
-      items: sortTaxLaws(filtered),
-      totalCount: filtered.length,
+      items: merged,
+      totalCount: merged.length,
     }
   }
 
