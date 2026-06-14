@@ -35,7 +35,7 @@ const ASSERTIVE_PATTERNS: RegExp[] = [
 ]
 
 /**
- * V4 시점 라벨 4종 형식 정규식 (CLAUDE.md §6.2 — TAX-037: 비법령용 [결정] 추가)
+ * V4 시점 라벨 형식 정규식 (CLAUDE.md §6.2 — TAX-037: 비법령용 [결정] 추가, TAX-6A-9: 단일 날짜 허용)
  *
  * 표기 기준은 현행 답변 생성 코드(llmAnswerGenerator.ts 프롬프트)·골든셋과
  * 일치시킨다. 즉 [적용 시점]의 물결표(~)는 양옆 공백 없음.
@@ -44,10 +44,16 @@ const ASSERTIVE_PATTERNS: RegExp[] = [
  *    리포트 §5 참조). 본 검증은 "현행 정상 답변을 깨지 않음"을 우선한다.
  *
  * [결정: YYYY.MM.DD]: 비법령(심판례·해석례·판례) — 결정·선고·회신일 (TAX-037)
+ * [적용 시점: YYYY.MM.DD]: 단일 날짜 형식 — LLM이 시작일을 알지 못할 때 생성 (TAX-6A-9, 회계사 승인 2026-06-14)
  */
 const TEMPORAL_LABEL_PATTERNS: RegExp[] = [
   /^\[현행\]$/,
+  // 완전한 범위 [적용 시점: YYYY.MM.DD~YYYY.MM.DD]
   /^\[적용 시점: \d{4}\.\d{2}\.\d{2}~\d{4}\.\d{2}\.\d{2}\]$/,
+  // 단일 날짜 [적용 시점: YYYY.MM.DD] — 시작일만 또는 종료일만 (TAX-6A-9, 회계사 승인 2026-06-14)
+  /^\[적용 시점: \d{4}\.\d{2}\.\d{2}\]$/,
+  // 시작일만 있는 범위 [적용 시점: YYYY.MM.DD~] (TAX-6A-9)
+  /^\[적용 시점: \d{4}\.\d{2}\.\d{2}~\]$/,
   /^\[폐지: \d{4}\.\d{2}\.\d{2}\]$/,
   /^\[결정: \d{4}\.\d{2}\.\d{2}\]$/,
 ]
@@ -114,6 +120,8 @@ function checkV2(answer: LabeledAnswer, sourceLaws: TaxLaw[]): string[] {
   // citation 발췌 원문 대조 (BUG-005 — N-2)
   for (const citation of answer.citations) {
     const content = citation.taxLaw.content.trim()
+    // content가 없는 비법령(API 본문 미제공)은 발췌 불가 — V2 면제 (TAX-6A-9, 회계사 승인 2026-06-14)
+    if (content.length === 0) continue
     const excerpt = citation.excerpt.trim()
     if (excerpt.length === 0) {
       fails.push(
