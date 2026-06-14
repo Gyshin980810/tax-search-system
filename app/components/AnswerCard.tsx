@@ -1,8 +1,16 @@
 'use client'
 import type { LabeledAnswer } from '@/domain/LabeledAnswer'
 import type { CitationLabel } from '@/domain/Citation'
+import type { TaxLaw } from '@/domain/TaxLaw'
 import { CitationCopy } from './CitationCopy'
 import { ImpactMapPanel } from './ImpactMapPanel'
+
+// 부칙·경과조치 citation 판별 (TAX-6B-2, FR-17)
+//  TAX-6B-1 buchikToTaxLaw가 articleTitle='부칙' + trustTier='T2'로 산출한 자료를 식별한다.
+//  본법령 조문과 시각적으로 구분해 신·구법 적용 경계(경과조치)임을 회계사에게 알린다.
+function isAddendum(taxLaw: TaxLaw): boolean {
+  return taxLaw.articleTitle === '부칙' && taxLaw.trustTier === 'T2'
+}
 
 interface AnswerCardProps {
   answer: LabeledAnswer
@@ -96,9 +104,24 @@ export function AnswerCard({ answer }: AnswerCardProps) {
       )}
 
       {/* 인용 목록 */}
-      {answer.citations.map((citation, idx) => (
-        <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4 space-y-2">
+      {answer.citations.map((citation, idx) => {
+        // 부칙·경과조치는 좌측 보더로 강조해 본법령 조문과 구분 (TAX-6B-2)
+        const addendum = isAddendum(citation.taxLaw)
+        return (
+        <div
+          key={idx}
+          className={`bg-white border border-gray-200 rounded-lg p-4 space-y-2 ${addendum ? 'border-l-4 border-l-indigo-400' : ''}`}
+        >
           <div className="flex items-center gap-2 flex-wrap">
+            {/* 경과조치 배지 — 부칙 citation에만 노출 (TAX-6B-2, FR-17) */}
+            {addendum && (
+              <span
+                data-testid="addendum-badge"
+                className="text-xs font-medium border rounded px-2 py-0.5 bg-indigo-100 text-indigo-800 border-indigo-200"
+              >
+                ⏱경과조치
+              </span>
+            )}
             <span
               data-testid="source-type-badge"
               className={`text-xs font-medium border rounded px-2 py-0.5 ${SOURCE_TYPE_STYLES[citation.taxLaw.sourceType] ?? 'bg-slate-100 text-slate-700 border-slate-200'}`}
@@ -154,7 +177,8 @@ export function AnswerCard({ answer }: AnswerCardProps) {
             <ImpactMapPanel caseNumber={citation.taxLaw.caseNumber} />
           )}
         </div>
-      ))}
+        )
+      })}
 
       {/* 관련 참고자료 — 본문 미제공 판례 등. 발췌 없이 메타·원문 링크만 (TAX-015B) */}
       {answer.references && answer.references.length > 0 && (
