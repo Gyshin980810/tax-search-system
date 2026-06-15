@@ -437,6 +437,39 @@ export function upgradeT1T2UnderlabeledCitations(
 }
 
 /**
+ * TAX-6A-11 (처방 D): 라벨 결정론화 — LLM 출력 라벨을 신뢰하지 않고
+ * Trust Tier로 라벨을 100% 재계산한다.
+ *
+ * 배경: TAX-6A-10 진단(2026-06-15)에서 G-3 골든셋이 실행마다 V3 PASS/FAIL이
+ *       갈리는 근본 원인이 "LLM이 라벨(🟢/🟡)을 비결정적으로 생성"하는 것으로 확정.
+ *       (같은 T1 조문에 어떤 실행은 🟢직접근거, 어떤 실행은 🟡유사사례)
+ *       temperature=0(처방 F)으로도 추론 서버 배치 변화 탓에 완전 제거 불가
+ *       (news.hada.io/topic?id=23038) → 라벨을 LLM 출력에서 아예 분리한다.
+ *
+ * 해결: lawVerifier의 TIER_ALLOWED_LABELS(단일 진실 원천)와 동일한 매핑을 어댑터가
+ *       강제 → checkV3가 검사하는 규칙을 구조적으로 항상 만족 → V3는 영원히 PASS.
+ *       korean-law-mcp의 verify_citations 철학(판정은 LLM이 아니라 결정론 레이어)과 정합.
+ *
+ * 매핑(lawVerifier.TIER_ALLOWED_LABELS와 1:1):
+ *   - ⚫폐지: LLM이 폐지로 판단한 경우만 보존(폐지는 드물고 본문 "삭제" 문구 판독 필요).
+ *   - T1·T2 → 🟢직접근거
+ *   - T3·T4 → 🟡유사사례
+ *
+ * matchStage(vector·expanded) 천장은 이후 downgradeVectorLabels가 별도 적용한다.
+ *
+ * 정책 변경(TAX-6A-10 1b 폐기): "summary 부정형이면 T1을 🟡 유지"를 제거.
+ *   T1에 🟡는 원래 TIER_ALLOWED_LABELS 위반(V3 FAIL)이었으므로 T1·T2는 무조건 🟢.
+ */
+export function resolveCitationLabel(
+  trustTier: TaxLaw['trustTier'],
+  llmLabel: CitationLabel,
+): CitationLabel {
+  if (llmLabel === '⚫폐지') return '⚫폐지'
+  if (trustTier === 'T1' || trustTier === 'T2') return '🟢직접근거'
+  return '🟡유사사례'
+}
+
+/**
  * TAX-026-G: matchStage 기반 라벨 강제 하향 후처리
  *
  * 벡터/확장 검색 결과는 Trust Tier와 무관하게 최대 라벨을 제한한다 (TAX-026 §0.4).
@@ -532,6 +565,9 @@ export class OpenAIAnswerGeneratorAdapter implements IAnswerGeneratorPort {
             schema: answerSchema,
             system: SYSTEM_PROMPT,
             prompt: userPrompt,
+            // TAX-6A-11 (F): 비결정성 최소화. temperature 미설정 시 기본값 1.0이라
+            // 매 호출 확률 분포를 굴려 다른 답을 냈다. 0 = 확률 1등만 선택.
+            temperature: 0,
             maxOutputTokens: 2_000,
             abortSignal: controller.signal,
           })
@@ -559,15 +595,17 @@ export class OpenAIAnswerGeneratorAdapter implements IAnswerGeneratorPort {
           const original = originalRefs[c.lawIndex]
           return {
             taxLaw: original,
-            label: c.label as CitationLabel,
+            // TAX-6A-11 (D): LLM이 낸 라벨(c.label)을 신뢰하지 않고 Trust Tier로 재계산.
+            // 라벨 비결정성을 출력에서 제거해 V3가 구조적으로 항상 PASS하도록 한다.
+            label: resolveCitationLabel(original.trustTier, c.label as CitationLabel),
             excerpt: extractExcerpt(original.content, c.focusHint),
             temporalLabel: c.temporalLabel,
           }
         })
 
       // TAX-051: V3 라벨 안전망 — T3·T4 출처에 🟢직접근거 부여 시 강제 다운그레이드.
-      // LLM 비결정성(약 6%)으로 [라벨 결정 표]·[T1·T2 부재 규칙]을 무시한 응답을
-      // 어댑터가 100% 차단해 회계사 보호 의무를 보장한다.
+      // TAX-6A-11 (D) 이후: resolveCitationLabel이 이미 라벨을 규칙대로 고정하므로
+      // 이 안전망은 입력에 위반이 없어 사실상 no-op이다. 2중 방어로 유지한다.
       const { citations: citationsAfterV3, summary: summaryAfterV3 } =
         downgradeT3T4DirectCitations(rawCitations, object.summary)
 

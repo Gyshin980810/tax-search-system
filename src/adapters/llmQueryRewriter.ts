@@ -79,6 +79,9 @@ export class OpenAIQueryRewriterAdapter implements IQueryRewriterPort {
         schema: querySchema,
         system: SYSTEM_PROMPT,
         prompt: userPrompt,
+        // TAX-6A-11 (F): 쿼리 변환도 temperature 미설정(기본 1.0)이라 같은 질문에
+        // 다른 키워드를 생성해 검색 결과를 흔들었다. 0으로 고정해 결정론에 근접.
+        temperature: 0,
         abortSignal: controller.signal,
       })
 

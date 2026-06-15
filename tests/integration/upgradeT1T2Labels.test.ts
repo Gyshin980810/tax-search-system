@@ -158,7 +158,7 @@ describe('OpenAIAnswerGeneratorAdapter — 1b 승격 파이프라인 통합', ()
     expect(result.citations[0].label).toBe('🟢직접근거')
   })
 
-  it('[부정형 skip] summary "찾지 못했" + T1 🟡 → 🟡 유지(보수적 — G3-05 의도된 동작)', async () => {
+  it('[D 정책] summary "찾지 못했" + T1 🟡 → 🟢직접근거(TAX-6A-11 라벨 결정론화)', async () => {
     mockedGenerateObject.mockResolvedValueOnce({
       object: {
         citations: [
@@ -172,8 +172,9 @@ describe('OpenAIAnswerGeneratorAdapter — 1b 승격 파이프라인 통합', ()
     const adapter = new OpenAIAnswerGeneratorAdapter()
     const result = await adapter.generate([MOCK_T1_LAW], '근로소득공제 한도는?', MOCK_TEMPORAL, 'direct')
 
-    // 보수적 정책: 부정형 summary면 승격 안 함 → 🟡 유지
-    expect(result.citations[0].label).toBe('🟡유사사례')
+    // TAX-6A-11 (D): resolveCitationLabel이 T1을 무조건 🟢로 고정한다.
+    // 기존 1b 보수정책("부정형이면 🟡 유지")은 폐기 — T1에 🟡는 V3 규칙 위반이었음.
+    expect(result.citations[0].label).toBe('🟢직접근거')
   })
 
   it('[vector 천장 우선] summary 긍정 + T1 🟡 + matchStage=vector → 승격됐다가 천장으로 🟡 복귀', async () => {
