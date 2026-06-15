@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { SearchBar } from './components/SearchBar'
 import { AnswerCard } from './components/AnswerCard'
+import { BookmarkList } from './components/BookmarkList'
 import type { LabeledAnswer } from '@/domain/LabeledAnswer'
 
 // 시점 모호성 감지 패턴 (CLAUDE.md §6.2 — 자의적 판단 금지, 회계사에게 확인 요청)
@@ -71,6 +72,9 @@ export default function Home() {
   return (
     <div className="space-y-6">
       <SearchBar onSubmit={handleSearch} loading={loading} />
+
+      {/* 즐겨찾기 목록 — 북마크가 있을 때만 표시 (TAX-6B-4, FR-12) */}
+      <BookmarkList onSelect={(q) => void handleSearch(q)} />
 
       {/* E-TEMPORAL-AMBIGUOUS: 시점 모호 감지 — 날짜 지정 요청 (CLAUDE.md §6.2, TAX-6A-5) */}
       {temporalAmbiguous && (
