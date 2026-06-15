@@ -395,6 +395,48 @@ export function downgradeT3T4DirectCitations(
 }
 
 /**
+ * TAX-6A-10 (1b): V3 라벨 안전망 양방향 보강 — T1·T2 과소부착 라벨 🟢 승격.
+ *
+ * 배경: TAX-6A-10 진단(2026-06-15)에서 LLM이 T1 법령 본문을 🟡유사사례로 과도
+ *       하향하는 V3 실패(G3-05)를 발견. 기존 downgradeT3T4DirectCitations는
+ *       위험 방향(T3·T4→🟢)만 교정하고, 이 과소평가 방향(T1·T2→🟡·⚪)은 빈틈이었음.
+ *
+ * 보수적 승격 정책 (회계사 승인 2026-06-15):
+ *   - summary가 부정형("찾지 못했")이면 승격하지 않는다. LLM이 "이 조문은 직접 답이
+ *     아니다"라고 판단한 것을 존중 — 관련만 있는 조문을 직접근거로 단정하는 위험
+ *     방향을 차단(§6.3 회계사 보호).
+ *   - summary가 긍정형일 때만 T1·T2의 🟡유사사례·⚪참고자료를 🟢직접근거로 승격.
+ *   - ⚫폐지는 불변(폐지 사실 자체는 유지).
+ *
+ * 적용 순서: downgradeT3T4DirectCitations 다음, downgradeVectorLabels 이전.
+ *   벡터/확장 검색 결과는 그 후 matchStage 천장으로 다시 하향되므로,
+ *   direct 결과의 T1·T2만 최종적으로 🟢 승격된다.
+ */
+export function upgradeT1T2UnderlabeledCitations(
+  citations: Citation[],
+  summary: string,
+): { citations: Citation[]; upgradedCount: number } {
+  // 보수적: summary가 "찾지 못함" 부정형이면 승격 자체를 하지 않는다.
+  if (summary.includes('찾지 못했')) {
+    return { citations, upgradedCount: 0 }
+  }
+
+  let upgradedCount = 0
+  const fixedCitations = citations.map((c) => {
+    const tier = c.taxLaw.trustTier
+    const isT1T2 = tier === 'T1' || tier === 'T2'
+    const isUnderlabeled = c.label === '🟡유사사례' || c.label === '⚪참고자료'
+    if (isT1T2 && isUnderlabeled) {
+      upgradedCount += 1
+      return { ...c, label: '🟢직접근거' as CitationLabel }
+    }
+    return c
+  })
+
+  return { citations: fixedCitations, upgradedCount }
+}
+
+/**
  * TAX-026-G: matchStage 기반 라벨 강제 하향 후처리
  *
  * 벡터/확장 검색 결과는 Trust Tier와 무관하게 최대 라벨을 제한한다 (TAX-026 §0.4).
@@ -529,10 +571,16 @@ export class OpenAIAnswerGeneratorAdapter implements IAnswerGeneratorPort {
       const { citations: citationsAfterV3, summary: summaryAfterV3 } =
         downgradeT3T4DirectCitations(rawCitations, object.summary)
 
+      // TAX-6A-10 (1b): T1·T2 과소부착 라벨 🟢 승격 (보수적 — summary 긍정형일 때만).
+      // downgradeT3T4 다음·downgradeVectorLabels 이전에 적용해, 벡터/확장 결과는
+      // 이후 matchStage 천장으로 다시 하향되고 direct 결과만 최종 승격되게 한다.
+      const { citations: citationsAfterUpgrade } =
+        upgradeT1T2UnderlabeledCitations(citationsAfterV3, summaryAfterV3)
+
       // TAX-026-G: 벡터/확장 검색 결과는 Trust Tier와 무관하게 라벨 상한 적용.
       const { citations, summary } = matchStage
-        ? downgradeVectorLabels(citationsAfterV3, summaryAfterV3, matchStage)
-        : { citations: citationsAfterV3, summary: summaryAfterV3 }
+        ? downgradeVectorLabels(citationsAfterUpgrade, summaryAfterV3, matchStage)
+        : { citations: citationsAfterUpgrade, summary: summaryAfterV3 }
 
       return {
         rawQuestion: question,
