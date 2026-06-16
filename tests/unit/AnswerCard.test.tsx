@@ -1,15 +1,14 @@
 /**
- * AnswerCard 단위 테스트 (TAX-6B-2)
+ * AnswerCard 단위 테스트 (TAX-6B-2·TAX-6B-4)
  *
- * 부칙·경과조치 citation 시각 구분(⏱경과조치 배지) 검증.
- * - 부칙(articleTitle='부칙' + T2) → 배지 노출
- * - 일반 조문(T1) → 배지 미노출 (회귀 방지)
+ * - 부칙·경과조치 배지 표시 (6B-2)
+ * - 즐겨찾기 토글 (6B-4)
  *
  * ImpactMapPanel은 mermaid 의존(jsdom 불가) → mock으로 대체.
  */
 
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { AnswerCard } from '../../app/components/AnswerCard'
 import type { LabeledAnswer } from '../../src/domain/LabeledAnswer'
 import type { TaxLaw } from '../../src/domain/TaxLaw'
@@ -78,6 +77,8 @@ function makeAnswer(citations: Citation[]): LabeledAnswer {
   }
 }
 
+const BOOKMARK_KEY = 'tax-bookmarks'
+
 // ── 테스트 ────────────────────────────────────────────────────────────────────
 
 describe('AnswerCard — 부칙·경과조치 표시 (TAX-6B-2)', () => {
@@ -106,5 +107,57 @@ describe('AnswerCard — 부칙·경과조치 표시 (TAX-6B-2)', () => {
 
     // 배지는 정확히 1개(부칙 카드)만 존재
     expect(screen.getAllByTestId('addendum-badge')).toHaveLength(1)
+  })
+})
+
+describe('AnswerCard — 라벨 툴팁·ARIA (TAX-6B-5)', () => {
+  it('라벨 배지에 title 속성이 있다', () => {
+    render(<AnswerCard answer={makeAnswer([makeCitation(makeArticle())])} />)
+    const badge = screen.getByTestId('label-badge')
+    expect(badge.getAttribute('title')).toBeTruthy()
+    expect(badge.getAttribute('title')).toContain('직접 근거')
+  })
+
+  it('인용 카드에 role="article"이 있다', () => {
+    render(<AnswerCard answer={makeAnswer([makeCitation(makeArticle())])} />)
+    expect(screen.getByRole('article')).toBeTruthy()
+  })
+})
+
+describe('AnswerCard — 즐겨찾기 토글 (TAX-6B-4)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('즐겨찾기 버튼이 렌더링된다', () => {
+    render(<AnswerCard answer={makeAnswer([makeCitation(makeArticle())])} />)
+    expect(screen.getByTestId('bookmark-btn')).toBeTruthy()
+  })
+
+  it('초기 상태에서 즐겨찾기 미등록(☆)으로 표시된다', () => {
+    render(<AnswerCard answer={makeAnswer([makeCitation(makeArticle())])} />)
+    expect(screen.getByTestId('bookmark-btn').textContent).toBe('☆')
+  })
+
+  it('버튼 클릭 시 localStorage에 저장된다', () => {
+    const answer = makeAnswer([makeCitation(makeArticle())])
+    render(<AnswerCard answer={answer} />)
+
+    fireEvent.click(screen.getByTestId('bookmark-btn'))
+
+    const stored = JSON.parse(localStorage.getItem(BOOKMARK_KEY) ?? '[]')
+    expect(stored).toHaveLength(1)
+    expect(stored[0].rawQuestion).toBe(answer.rawQuestion)
+  })
+
+  it('저장 후 다시 클릭 시 localStorage에서 제거된다', () => {
+    const answer = makeAnswer([makeCitation(makeArticle())])
+    render(<AnswerCard answer={answer} />)
+
+    fireEvent.click(screen.getByTestId('bookmark-btn')) // 추가
+    fireEvent.click(screen.getByTestId('bookmark-btn')) // 제거
+
+    const stored = JSON.parse(localStorage.getItem(BOOKMARK_KEY) ?? '[]')
+    expect(stored).toHaveLength(0)
   })
 })

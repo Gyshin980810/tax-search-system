@@ -1,9 +1,11 @@
 'use client'
+import { useState, useEffect } from 'react'
 import type { LabeledAnswer } from '@/domain/LabeledAnswer'
 import type { CitationLabel } from '@/domain/Citation'
 import type { TaxLaw } from '@/domain/TaxLaw'
 import { CitationCopy } from './CitationCopy'
 import { ImpactMapPanel } from './ImpactMapPanel'
+import { isBookmarked, addBookmark, removeBookmark } from '@/utils/bookmarkStore'
 
 // 부칙·경과조치 citation 판별 (TAX-6B-2, FR-17)
 //  TAX-6B-1 buchikToTaxLaw가 articleTitle='부칙' + trustTier='T2'로 산출한 자료를 식별한다.
@@ -23,11 +25,27 @@ const LABEL_STYLES: Record<CitationLabel, string> = {
   '⚫폐지':     'bg-gray-800 text-white border-gray-900',
 }
 
+// 라벨 툴팁 — 마우스오버 시 의미 설명 (TAX-6B-5)
+const LABEL_TITLES: Record<CitationLabel, string> = {
+  '🟢직접근거': '직접 근거: 검색된 조문이 이 사안에 직접 적용됩니다',
+  '🟡유사사례': '유사 사례: 논리적으로 유사하나 사실관계가 다를 수 있습니다. 단정 적용 금지',
+  '⚪참고자료': '참고 자료: 관련 쟁점을 다루나 직접 적용이 어렵습니다',
+  '⚫폐지':     '폐지된 조문: 현재는 효력이 없습니다. 폐지 시점을 반드시 확인하세요',
+}
+
 const TIER_STYLES: Record<string, string> = {
   T1: 'bg-blue-100 text-blue-800',
   T2: 'bg-indigo-100 text-indigo-800',
   T3: 'bg-purple-100 text-purple-800',
   T4: 'bg-pink-100 text-pink-800',
+}
+
+// Tier 툴팁 — Trust Tier 의미 설명 (TAX-6B-5)
+const TIER_TITLES: Record<string, string> = {
+  T1: 'T1: 법률·시행령·시행규칙 본문 (최우선 근거)',
+  T2: 'T2: 법령 부칙·경과조치 (시점 경계 근거)',
+  T3: 'T3: 국세청 예규·해석례·심판례 (유사 사례)',
+  T4: 'T4: 대법원·헌법재판소 판례 (참고)',
 }
 
 // 자료유형 배지 — 법령/판례/해석례/심판례를 한눈에 구분 (TAX-015)
@@ -47,6 +65,25 @@ function dateLabel(sourceType: string, issuingBody?: string): string {
 }
 
 export function AnswerCard({ answer }: AnswerCardProps) {
+  const [bookmarked, setBookmarked] = useState(false)
+
+  useEffect(() => {
+    setBookmarked(isBookmarked(answer.rawQuestion))
+  }, [answer.rawQuestion])
+
+  function toggleBookmark() {
+    if (bookmarked) {
+      removeBookmark(answer.rawQuestion)
+    } else {
+      addBookmark({
+        rawQuestion: answer.rawQuestion,
+        summary: answer.summary,
+        temporalLabel: answer.temporalLabel,
+      })
+    }
+    setBookmarked(!bookmarked)
+  }
+
   // 노출 게이트는 화이트리스트(BUG-005 — M-7) — `status === 'PASS'`만 본문 노출.
   // PENDING(검증 미수행)은 기존 경고 유지, 그 외(FAIL 등)는 노출 불가 안내.
   // 정확성 우선 원칙(CLAUDE.md §0)상 게이트는 화이트리스트가 안전 기본값.
@@ -89,7 +126,19 @@ export function AnswerCard({ answer }: AnswerCardProps) {
     <div className="space-y-4">
       {/* 요약 + 시점 라벨 */}
       <div className="text-sm text-gray-700 bg-white border border-gray-200 rounded-lg px-4 py-3">
-        <p className="font-medium text-gray-500 text-xs mb-1">요약</p>
+        <div className="flex items-center justify-between mb-1">
+          <p className="font-medium text-gray-500 text-xs">요약</p>
+          {/* 즐겨찾기 토글 버튼 (TAX-6B-4, FR-12) */}
+          <button
+            type="button"
+            onClick={toggleBookmark}
+            data-testid="bookmark-btn"
+            aria-label={bookmarked ? '즐겨찾기 제거' : '즐겨찾기 추가'}
+            className="text-base text-gray-400 hover:text-yellow-500 transition-colors"
+          >
+            {bookmarked ? '⭐' : '☆'}
+          </button>
+        </div>
         <p>{answer.summary}</p>
         <p
           data-testid="temporal-label"
@@ -110,6 +159,8 @@ export function AnswerCard({ answer }: AnswerCardProps) {
         return (
         <div
           key={idx}
+          role="article"
+          aria-label={`인용 ${idx + 1}: ${citation.taxLaw.lawName}${citation.taxLaw.articleNumber ? ' ' + citation.taxLaw.articleNumber : ''}`}
           className={`bg-white border border-gray-200 rounded-lg p-4 space-y-2 ${addendum ? 'border-l-4 border-l-indigo-400' : ''}`}
         >
           <div className="flex items-center gap-2 flex-wrap">
@@ -130,11 +181,15 @@ export function AnswerCard({ answer }: AnswerCardProps) {
             </span>
             <span
               data-testid="label-badge"
-              className={`text-xs font-medium border rounded px-2 py-0.5 ${LABEL_STYLES[citation.label]}`}
+              title={LABEL_TITLES[citation.label]}
+              className={`text-xs font-medium border rounded px-2 py-0.5 cursor-help ${LABEL_STYLES[citation.label]}`}
             >
               {citation.label}
             </span>
-            <span className={`text-xs font-mono rounded px-1.5 py-0.5 ${TIER_STYLES[citation.taxLaw.trustTier] ?? 'bg-gray-100 text-gray-600'}`}>
+            <span
+              title={TIER_TITLES[citation.taxLaw.trustTier]}
+              className={`text-xs font-mono rounded px-1.5 py-0.5 cursor-help ${TIER_STYLES[citation.taxLaw.trustTier] ?? 'bg-gray-100 text-gray-600'}`}
+            >
               {citation.taxLaw.trustTier}
             </span>
             <span className="text-xs text-gray-500">{citation.temporalLabel}</span>

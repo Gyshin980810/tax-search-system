@@ -41,7 +41,16 @@ const hallucinationCases: GoldenCase[] = existsSync(hallucinationPath)
     )
   : []
 
-const allCases: GoldenCase[] = [...directSet.cases, ...temporalCases, ...hallucinationCases]
+// G-5: 폐지·일몰 골든셋 — expectedStatus가 채워진 케이스만 포함(TAX-6B-6)
+//  expectedStatus='' 인 골격 케이스는 회계사 검수 전이므로 실행에서 제외
+const repealedPath = join(process.cwd(), 'eval', 'golden_repealed.json')
+const repealedCases: GoldenCase[] = existsSync(repealedPath)
+  ? (JSON.parse(readFileSync(repealedPath, 'utf-8')) as GoldenSet).cases.filter(
+      (c) => c.expectedStatus === 'PASS' || c.expectedStatus === 'FAIL'
+    )
+  : []
+
+const allCases: GoldenCase[] = [...directSet.cases, ...temporalCases, ...hallucinationCases, ...repealedCases]
 
 // ─── 테스트 ──────────────────────────────────────────────────────────────────
 

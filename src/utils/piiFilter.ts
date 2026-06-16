@@ -28,6 +28,26 @@ const PII_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
 ]
 
 /**
+ * 검색어에서 한국 휴대폰 번호·이메일 주소를 마스킹합니다.
+ * 최근 검색어 localStorage 저장 전에 적용 — 원문 보관 금지 (CLAUDE.md §7, FR-11).
+ * 주민·사업자번호는 detectPii로 이미 입력 거부되므로 여기서 처리하지 않습니다.
+ */
+export function maskPhoneEmail(text: string): string {
+  // 휴대폰: 010-1234-5678 / 01012345678 / 016-123-4567 등
+  const maskedPhone = text.replace(/0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}/g, (m) => {
+    const digits = m.replace(/\D/g, '')
+    return `${digits.slice(0, 3)}-****-${digits.slice(-4)}`
+  })
+  // 이메일: user@example.com → us***@example.com
+  return maskedPhone.replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, (m) => {
+    const at = m.indexOf('@')
+    const local = m.slice(0, at)
+    const visible = local.length > 2 ? local.slice(0, 2) : local.slice(0, 1)
+    return `${visible}***${m.slice(at)}`
+  })
+}
+
+/**
  * 검색 키워드에서 PII 패턴을 감지합니다.
  * 공백·전각숫자·구분자로 우회한 입력도 차단합니다.
  *
