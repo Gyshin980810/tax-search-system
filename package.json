@@ -18,6 +18,7 @@
     "golden:probe-nonlaw": "node --conditions=react-server --import tsx scripts/golden/probeNonlaw.ts",
     "golden:probe-law": "node --conditions=react-server --import tsx scripts/golden/probeLaw.ts",
     "golden:build-nonlaw": "node --conditions=react-server --import tsx scripts/golden/buildNonlawCases.ts",
+    "golden:harvest": "node --env-file=.env.local --conditions=react-server --import tsx scripts/golden/harvestToSeeds.ts",
     "perf:p95": "node --env-file=.env.local --conditions=react-server --import tsx scripts/perf/measureP95.ts",
     "perf:variance": "node --env-file=.env.local --conditions=react-server --import tsx scripts/perf/measureVariance.ts",
     "perf:diagnose": "node --env-file=.env.local --conditions=react-server --import tsx scripts/perf/measureP95.ts 40 diagnose",
