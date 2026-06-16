@@ -1,6 +1,6 @@
 import 'server-only'
 import { Pool } from 'pg'
-import type { IOpsLogPort, OpsQueryLogEntry } from '../ports/opsLogPort'
+import type { IOpsLogPort, OpsQueryLogEntry, OpsFeedbackEntry } from '../ports/opsLogPort'
 
 /**
  * 운영 쿼리 로그 어댑터 — Neon Postgres INSERT (TAX-030-A, FR-23)
@@ -32,6 +32,16 @@ export class PgOpsLogAdapter implements IOpsLogPort {
       ],
     )
   }
+
+  // 조용한 틀림 신고 1건 적재 (TAX-030-B, FR-24) — 기존 Pool 재사용
+  async recordFeedback(entry: OpsFeedbackEntry): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO ops_feedback
+         (query_hash, query_norm, reason, source_types)
+       VALUES ($1, $2, $3, $4)`,
+      [entry.queryHash, entry.queryNorm, entry.reason, entry.sourceTypes],
+    )
+  }
 }
 
 /**
@@ -43,5 +53,9 @@ export class PgOpsLogAdapter implements IOpsLogPort {
 export class NullOpsLogAdapter implements IOpsLogPort {
   async recordQuery(_entry: OpsQueryLogEntry): Promise<void> {
     // no-op: 수집 비활성 환경 — 답변 생성에 영향을 주지 않는다
+  }
+
+  async recordFeedback(_entry: OpsFeedbackEntry): Promise<void> {
+    // no-op: 수집 비활성 환경 — 신고는 조용히 건너뛴다(로컬·테스트용)
   }
 }
