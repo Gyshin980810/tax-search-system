@@ -6,6 +6,7 @@ import type { IQueryRewriterPort } from '@/ports/llmQueryRewriterPort'
 import type { ISearchPort } from '@/ports/taxLawSearchPort'
 import type { IAnswerGeneratorPort } from '@/ports/llmAnswerGeneratorPort'
 import type { ILawVerifierPort } from '@/ports/lawVerifierPort'
+import type { IOpsLogPort } from '@/ports/opsLogPort'
 import type { SearchQuery } from '@/domain/SearchQuery'
 import type { SearchResult } from '@/domain/SearchResult'
 import type { LabeledAnswer } from '@/domain/LabeledAnswer'
@@ -634,6 +635,88 @@ describe('generateAnswer Usecase', () => {
       await expect(
         generateAnswer(queryRewriter, searchPort, answerGenerator, verifier, '부가가치세', MOCK_TEMPORAL),
       ).rejects.toBeInstanceOf(LlmUnavailableError)
+    })
+  })
+
+  describe('운영 쿼리 로그 수집 (TAX-030-A, FR-23)', () => {
+    /** recordQuery를 spy로 감싼 가짜 운영 로그 포트 */
+    function makeOpsLog(): IOpsLogPort & { recordQuery: ReturnType<typeof vi.fn> } {
+      return { recordQuery: vi.fn().mockResolvedValue(undefined) }
+    }
+
+    it('성공 경로에서 recordQuery를 1회 호출하고 verifyStatus=PASS로 기록한다', async () => {
+      const { queryRewriter, searchPort, answerGenerator, verifier } = makeStubs(PASS_RESULT)
+      const opsLog = makeOpsLog()
+
+      await generateAnswer(
+        queryRewriter, searchPort, answerGenerator, verifier, '질문', MOCK_TEMPORAL, opsLog,
+      )
+
+      expect(opsLog.recordQuery).toHaveBeenCalledTimes(1)
+      const entry = opsLog.recordQuery.mock.calls[0][0]
+      expect(entry.verifyStatus).toBe('PASS')
+      expect(entry.failedChecks).toEqual([])
+      expect(entry.sourceTypes).toEqual(['법령']) // MOCK_SEARCH_RESULT는 법령 1건
+      expect(entry.queryHash).toHaveLength(16)
+      expect(typeof entry.latencyMs).toBe('number')
+    })
+
+    it('E-VERIFY-FAIL 경로에서도 verifyStatus=FAIL·failedChecks를 기록한 뒤 throw한다', async () => {
+      const { queryRewriter, searchPort, answerGenerator, verifier } = makeStubs()
+      // V1 재시도 후에도 FAIL → E-VERIFY-FAIL
+      vi.mocked(verifier.verify)
+        .mockResolvedValueOnce(FAIL_V1_RESULT)
+        .mockResolvedValueOnce(FAIL_V1_RESULT)
+      const opsLog = makeOpsLog()
+
+      const err = await generateAnswer(
+        queryRewriter, searchPort, answerGenerator, verifier, '질문', MOCK_TEMPORAL, opsLog,
+      ).catch((e) => e)
+
+      expect(err).toBeInstanceOf(AppError)
+      expect(err.code).toBe('E-VERIFY-FAIL')
+      // 실패 경로도 메타데이터를 남긴다
+      expect(opsLog.recordQuery).toHaveBeenCalledTimes(1)
+      const entry = opsLog.recordQuery.mock.calls[0][0]
+      expect(entry.verifyStatus).toBe('FAIL')
+      expect(entry.failedChecks).toContain('v1')
+    })
+
+    it('fail-soft: recordQuery가 reject해도 정상 답변을 반환한다', async () => {
+      const { queryRewriter, searchPort, answerGenerator, verifier } = makeStubs(PASS_RESULT)
+      const opsLog: IOpsLogPort = { recordQuery: vi.fn().mockRejectedValue(new Error('DB down')) }
+
+      const result = await generateAnswer(
+        queryRewriter, searchPort, answerGenerator, verifier, '질문', MOCK_TEMPORAL, opsLog,
+      )
+
+      // 로그 적재 실패가 답변 생성을 막지 않는다
+      expect(result.verificationResult.status).toBe('PASS')
+    })
+
+    it('query_norm에 휴대폰·이메일이 마스킹되어 기록된다', async () => {
+      const { queryRewriter, searchPort, answerGenerator, verifier } = makeStubs(PASS_RESULT)
+      const opsLog = makeOpsLog()
+
+      await generateAnswer(
+        queryRewriter, searchPort, answerGenerator, verifier,
+        '010-1234-5678 user@example.com 문의', MOCK_TEMPORAL, opsLog,
+      )
+
+      const entry = opsLog.recordQuery.mock.calls[0][0]
+      expect(entry.queryNorm).toContain('010-****-5678')
+      expect(entry.queryNorm).toContain('us***@example.com')
+      expect(entry.queryNorm).not.toContain('1234-5678') // 원본 휴대폰 노출 금지
+    })
+
+    it('opsLog 미주입(undefined) 시에도 정상 동작한다(하위 호환)', async () => {
+      const { queryRewriter, searchPort, answerGenerator, verifier } = makeStubs(PASS_RESULT)
+
+      const result = await generateAnswer(
+        queryRewriter, searchPort, answerGenerator, verifier, '질문', MOCK_TEMPORAL,
+      )
+
+      expect(result.verificationResult.status).toBe('PASS')
     })
   })
 })
