@@ -3374,7 +3374,19 @@
         },
         "generatedAt": "2026-06-15T06:34:32.917Z"
       },
-      "expectedStatus": "PASS"
+      "expectedStatus": "PASS",
+      "expectedContent": {
+        "mustInclude": [
+          "통합",
+          "투자",
+          "세액공제"
+        ],
+        "mustExclude": [
+          "대체 조항도 존재하지 않습니다",
+          "대체 규정이 없습니다",
+          "대체 조항이 없습니다"
+        ]
+      }
     },
     {
       "id": "G5-07",
@@ -5931,7 +5943,17 @@
         },
         "generatedAt": "2026-06-15T06:35:35.848Z"
       },
-      "expectedStatus": "PASS"
+      "expectedStatus": "PASS",
+      "expectedContent": {
+        "mustInclude": [
+          "제121조의17",
+          "감면",
+          "세액"
+        ],
+        "mustExclude": [
+          "직접 근거(법령 본문)를 찾지 못했습니다"
+        ]
+      }
     }
   ]
 }

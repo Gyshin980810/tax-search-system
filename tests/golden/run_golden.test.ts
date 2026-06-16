@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { LawVerifierAdapter } from '@/adapters/lawVerifier'
+import { checkContent, type ContentSpec } from '@/domain/contentVerify'
 import type { LabeledAnswer } from '@/domain/LabeledAnswer'
 import type { TaxLaw } from '@/domain/TaxLaw'
 
@@ -14,6 +15,8 @@ interface GoldenCase {
   sourceLaws: TaxLaw[]
   answer: LabeledAnswer
   expectedStatus: 'PASS' | 'FAIL' | ''
+  /** TAX-6B-9 내용 검증기(방안 A) — 회계사 작성 기대 명제 (선택) */
+  expectedContent?: ContentSpec
 }
 
 interface GoldenSet {
@@ -74,6 +77,34 @@ describe('골든셋 V1~V6 직접 검증 (실제 API 없음)', () => {
         expect(result.checks.v6).toBe(true)
         expect(result.failReasons).toHaveLength(0)
       }
+    })
+  }
+})
+
+// ─── 내용(도메인 정확도) 검증 — TAX-6B-9 방안 A ───────────────────────────────
+//   V1~V6와 완전 분리된 별도 트랙. expectedContent 필드가 있는 케이스만 대상.
+//   "인용은 정직하지만 사실은 틀린"(조용한 틀림) 유형 탐지.
+//
+// ⚠️ 현재 G5-06·G5-10의 expectedContent는 AI 제안값(_expectedContentProposedBy)이며
+//    회계사 검수 전이다. 검수 전까지 이 두 케이스는 실제 답변 기준 CONTENT_FAIL이
+//    "기대된" 상태이므로(=조용한 틀림을 잡아내야 함), 골든 회귀에서는 검증기가
+//    탐지에 성공하는지(=CONTENT_FAIL 산출)를 회귀 기준으로 둔다.
+const contentCases = allCases.filter(
+  (c): c is GoldenCase & { expectedContent: ContentSpec } => c.expectedContent != null
+)
+
+describe('골든셋 내용 검증 (TAX-6B-9 방안 A, expectedContent 있는 케이스만)', () => {
+  it('내용 검증 대상 케이스가 1건 이상 존재', () => {
+    expect(contentCases.length).toBeGreaterThan(0)
+  })
+
+  for (const tc of contentCases) {
+    it(`[${tc.id}] 내용 검증기가 "조용한 틀림"을 CONTENT_FAIL로 탐지`, () => {
+      const result = checkContent(tc.answer.summary, tc.expectedContent)
+
+      // G5-06·G5-10은 도메인상 틀린 답변(사실 오류·검색 누락)이므로
+      // 내용 검증기가 이를 CONTENT_FAIL로 잡아내야 한다 (티켓 합격 기준).
+      expect(result.status).toBe('CONTENT_FAIL')
     })
   }
 })

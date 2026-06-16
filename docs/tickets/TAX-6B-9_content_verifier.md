@@ -1,7 +1,9 @@
 # TAX-6B-9 — 내용(도메인 정확도) 검증기
 
-> 상태: **보류(Deferred)** — 구체 방안은 **Phase 7 완료 후** 결정 (회계사 결정 2026-06-16)
+> 상태: **구현 완료(2026-06-16)** — **방안 A(규칙 기반)** 확정 (회계사 결정 2026-06-16)
 > 선행: TAX-6B-7 (G-5 실측), TAX-6B-8 (골든 회귀 CI)
+> 리포트: `docs/reports/TAX-6B-9_report.md`
+> ⚠️ G5-06·G5-10 `expectedContent`는 **AI 제안값 — 회계사 검수 대기**
 
 ---
 
@@ -59,6 +61,16 @@ G-5 실측에서 두 가지 실제 사례가 드러났습니다.
 
 ---
 
-## 파일 (확정 후)
+## 파일 (방안 A 확정)
 
-- (방안 확정 후 기입)
+**신규:**
+- `src/domain/contentVerify.ts` — 순수 함수 `checkContent(summary, spec)` (LLM·API 미사용, 결정론적)
+- `tests/unit/contentVerify.test.ts` — 유닛 9건
+
+**수정:**
+- `tests/golden/run_golden.test.ts` — 내용 검증 describe(V1~V6 블록과 분리)
+- `eval/golden_repealed.json` — G5-06·G5-10 `expectedContent` 추가 (AI 제안값, 회계사 검수 대기)
+
+**무변경:** `src/adapters/lawVerifier.ts`·`TIER_ALLOWED_LABELS`·`generateAnswer.ts` (§6.4)
+
+검증: tsc 0 · build PASS · vitest 607/607 (기존 595 + 신규 12)
