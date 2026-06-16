@@ -7,7 +7,7 @@
  * ImpactMapPanel은 mermaid 의존(jsdom 불가) → mock으로 대체.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { AnswerCard } from '../../app/components/AnswerCard'
 import type { LabeledAnswer } from '../../src/domain/LabeledAnswer'
@@ -159,5 +159,63 @@ describe('AnswerCard — 즐겨찾기 토글 (TAX-6B-4)', () => {
 
     const stored = JSON.parse(localStorage.getItem(BOOKMARK_KEY) ?? '[]')
     expect(stored).toHaveLength(0)
+  })
+})
+
+describe('AnswerCard — 조용한 틀림 신고 👎 (TAX-030-B, FR-24)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('👎 신고 버튼이 렌더링된다', () => {
+    render(<AnswerCard answer={makeAnswer([makeCitation(makeArticle())])} />)
+    expect(screen.getByTestId('feedback-open-btn')).toBeTruthy()
+  })
+
+  it('버튼 클릭 시 사유 입력창과 신고 버튼이 노출된다', () => {
+    render(<AnswerCard answer={makeAnswer([makeCitation(makeArticle())])} />)
+
+    fireEvent.click(screen.getByTestId('feedback-open-btn'))
+
+    expect(screen.getByTestId('feedback-reason-input')).toBeTruthy()
+    expect(screen.getByTestId('feedback-submit-btn')).toBeTruthy()
+  })
+
+  it('신고 제출 시 /api/feedback에 질문·사유·sourceTypes를 전송하고 완료 메시지를 표시한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const answer = makeAnswer([makeCitation(makeArticle())])
+    render(<AnswerCard answer={answer} />)
+
+    fireEvent.click(screen.getByTestId('feedback-open-btn'))
+    fireEvent.change(screen.getByTestId('feedback-reason-input'), {
+      target: { value: '결론이 반대입니다' },
+    })
+    fireEvent.click(screen.getByTestId('feedback-submit-btn'))
+
+    // 완료 메시지가 비동기로 나타난다
+    expect(await screen.findByTestId('feedback-done')).toBeTruthy()
+
+    // 올바른 엔드포인트·바디로 호출됐는지 확인
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/feedback',
+      expect.objectContaining({ method: 'POST' }),
+    )
+    const sentBody = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(sentBody.question).toBe(answer.rawQuestion)
+    expect(sentBody.reason).toBe('결론이 반대입니다')
+    expect(sentBody.sourceTypes).toEqual(['법령'])
+  })
+
+  it('전송 실패(ok=false) 시 에러 메시지를 표시한다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
+
+    render(<AnswerCard answer={makeAnswer([makeCitation(makeArticle())])} />)
+
+    fireEvent.click(screen.getByTestId('feedback-open-btn'))
+    fireEvent.click(screen.getByTestId('feedback-submit-btn'))
+
+    expect(await screen.findByTestId('feedback-error')).toBeTruthy()
   })
 })

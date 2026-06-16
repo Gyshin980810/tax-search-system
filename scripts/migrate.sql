@@ -46,3 +46,21 @@ CREATE TABLE IF NOT EXISTS ops_query_log (
   created_at    TIMESTAMPTZ DEFAULT now()
   -- ❌ 회계사 식별자·IP·이메일 컬럼 일절 없음
 );
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 조용한 틀림 신고 로그 — TAX-030-B (FR-24)
+-- 검증(V1~V6)은 통과했으나 회계사가 "실제 오답"으로 판단한 답변(silent failure)을 적재한다.
+-- 자동으로는 절대 탐지 불가한 silent failure의 유일한 수집 경로.
+-- ❗ 회계사 식별자(이메일·이름·IP·세션 ID) 컬럼을 구조적으로 두지 않는다 (CLAUDE.md §7).
+--   query_norm·reason은 maskPhoneEmail 적용 후 저장, 주민·사업자번호는 detectPii가 입력 거부.
+-- 재실행 안전: IF NOT EXISTS.
+
+CREATE TABLE IF NOT EXISTS ops_feedback (
+  id           BIGSERIAL PRIMARY KEY,
+  query_hash   TEXT NOT NULL,   -- SHA-256(원본질문) 앞 16자 — ops_query_log와 조인 키(고유키 아님)
+  query_norm   TEXT NOT NULL,   -- maskPhoneEmail 적용 후 질문
+  reason       TEXT,            -- maskPhoneEmail 적용 후 신고 사유 (선택 입력 — 빈 값 가능)
+  source_types TEXT[],          -- ['법령','심판례'] 등 답변에 사용된 출처 유형
+  created_at   TIMESTAMPTZ DEFAULT now()
+  -- ❌ 회계사 식별자·IP·이메일·세션 ID 컬럼 일절 없음
+);

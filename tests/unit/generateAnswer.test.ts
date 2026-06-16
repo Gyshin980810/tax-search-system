@@ -639,9 +639,12 @@ describe('generateAnswer Usecase', () => {
   })
 
   describe('운영 쿼리 로그 수집 (TAX-030-A, FR-23)', () => {
-    /** recordQuery를 spy로 감싼 가짜 운영 로그 포트 */
+    /** recordQuery를 spy로 감싼 가짜 운영 로그 포트 (recordFeedback은 TAX-030-B 확장분 — no-op) */
     function makeOpsLog(): IOpsLogPort & { recordQuery: ReturnType<typeof vi.fn> } {
-      return { recordQuery: vi.fn().mockResolvedValue(undefined) }
+      return {
+        recordQuery: vi.fn().mockResolvedValue(undefined),
+        recordFeedback: vi.fn().mockResolvedValue(undefined),
+      }
     }
 
     it('성공 경로에서 recordQuery를 1회 호출하고 verifyStatus=PASS로 기록한다', async () => {
@@ -684,7 +687,10 @@ describe('generateAnswer Usecase', () => {
 
     it('fail-soft: recordQuery가 reject해도 정상 답변을 반환한다', async () => {
       const { queryRewriter, searchPort, answerGenerator, verifier } = makeStubs(PASS_RESULT)
-      const opsLog: IOpsLogPort = { recordQuery: vi.fn().mockRejectedValue(new Error('DB down')) }
+      const opsLog: IOpsLogPort = {
+        recordQuery: vi.fn().mockRejectedValue(new Error('DB down')),
+        recordFeedback: vi.fn().mockResolvedValue(undefined),
+      }
 
       const result = await generateAnswer(
         queryRewriter, searchPort, answerGenerator, verifier, '질문', MOCK_TEMPORAL, opsLog,

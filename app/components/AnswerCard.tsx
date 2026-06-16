@@ -64,12 +64,40 @@ function dateLabel(sourceType: string, issuingBody?: string): string {
   return '선고일' // 판례
 }
 
+// 👎 신고 진행 상태 (TAX-030-B, FR-24)
+//  idle=버튼만 / open=사유 입력 중 / submitting=전송 중 / done=접수 완료 / error=실패
+type ReportStatus = 'idle' | 'open' | 'submitting' | 'done' | 'error'
+
 export function AnswerCard({ answer }: AnswerCardProps) {
   const [bookmarked, setBookmarked] = useState(false)
+  const [reportStatus, setReportStatus] = useState<ReportStatus>('idle')
+  const [reasonInput, setReasonInput] = useState('')
 
   useEffect(() => {
     setBookmarked(isBookmarked(answer.rawQuestion))
   }, [answer.rawQuestion])
+
+  // 조용한 틀림 신고 전송 (TAX-030-B) — 검증은 통과했으나 회계사가 오답으로 판단한 답변
+  //  sourceTypes는 인용된 자료유형을 중복 제거해 함께 보냄(환류 집계용)
+  async function submitReport() {
+    setReportStatus('submitting')
+    try {
+      const sourceTypes = [...new Set(answer.citations.map((c) => c.taxLaw.sourceType))]
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: answer.rawQuestion,
+          reason: reasonInput.trim() || undefined,
+          sourceTypes,
+        }),
+      })
+      if (!res.ok) throw new Error('feedback request failed')
+      setReportStatus('done')
+    } catch {
+      setReportStatus('error')
+    }
+  }
 
   function toggleBookmark() {
     if (bookmarked) {
@@ -299,6 +327,83 @@ export function AnswerCard({ answer }: AnswerCardProps) {
         className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-4 py-3 leading-relaxed"
       >
         {answer.disclaimer}
+      </div>
+
+      {/* 조용한 틀림 신고 👎 (TAX-030-B, FR-24)
+          V1~V6는 통과했으나 회계사가 실제 오답으로 판단한 답변을 신고받는 유일한 경로.
+          자동 탐지 불가한 silent failure를 사람이 직접 눌러야만 수집된다. */}
+      <div data-testid="feedback-section" className="text-xs text-gray-500 px-1">
+        {reportStatus === 'idle' && (
+          <button
+            type="button"
+            onClick={() => setReportStatus('open')}
+            data-testid="feedback-open-btn"
+            className="text-gray-400 hover:text-red-600 transition-colors"
+          >
+            👎 이 답변이 틀렸나요?
+          </button>
+        )}
+
+        {reportStatus === 'open' && (
+          <div className="space-y-2 bg-white border border-gray-200 rounded-lg p-3">
+            <label htmlFor="feedback-reason" className="block font-medium text-gray-600">
+              어디가 틀렸는지 알려주시면 개선에 큰 도움이 됩니다 (선택)
+            </label>
+            <textarea
+              id="feedback-reason"
+              data-testid="feedback-reason-input"
+              value={reasonInput}
+              onChange={(e) => setReasonInput(e.target.value)}
+              maxLength={500}
+              rows={3}
+              placeholder="예: 인용 조문은 맞지만 결론이 반대입니다 / 적용 시점이 다릅니다"
+              className="w-full text-sm text-gray-700 border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-red-400"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={submitReport}
+                data-testid="feedback-submit-btn"
+                className="text-xs font-medium bg-red-600 text-white rounded px-3 py-1.5 hover:bg-red-700 transition-colors"
+              >
+                신고하기
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setReportStatus('idle')
+                  setReasonInput('')
+                }}
+                className="text-xs text-gray-500 hover:text-gray-700"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        )}
+
+        {reportStatus === 'submitting' && (
+          <span className="text-gray-400">신고 전송 중…</span>
+        )}
+
+        {reportStatus === 'done' && (
+          <span data-testid="feedback-done" className="text-green-600">
+            ✓ 신고가 접수되었습니다. 검토에 반영하겠습니다. 감사합니다.
+          </span>
+        )}
+
+        {reportStatus === 'error' && (
+          <span data-testid="feedback-error" className="text-red-600">
+            신고 접수에 실패했습니다.{' '}
+            <button
+              type="button"
+              onClick={submitReport}
+              className="underline hover:text-red-700"
+            >
+              다시 시도
+            </button>
+          </span>
+        )}
       </div>
     </div>
   )
