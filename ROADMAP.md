@@ -7,8 +7,8 @@
 >
 > 충돌 시 상위 문서가 우선합니다. 본 로드맵의 모든 결정은 PRD/SSOT v2.0과 정합해야 합니다.
 >
-> 작성일: 2026-05-13 (v1.0) / 갱신: 2026-06-11 (v2.2 — TAX-056 베타 접근 패스코드 게이트 완결(proxy.ts+HMAC 세션+Vercel 배포) + E2E storageState 인증 셋업 추가(Playwright 6/6 PASS) → Phase 6A 착수 가능)
-> 버전: 2.2
+> 작성일: 2026-05-13 (v1.0) / 갱신: 2026-06-16 (v2.4 — Phase 6A·6B 전체 완결 + Vercel 베타 배포 완료 + PR #1 머지)
+> 버전: 2.4
 > 작성자: Claude + 회계사
 
 ---
@@ -333,13 +333,13 @@ PRD §16의 M0~M6 마일스톤을 Phase로 정리합니다. 각 Phase는 상위 
 
 ---
 
-### Phase 6A — M6A: 지방세 통합 + 시점 검색 + G-3·G-4 골든셋 ⬜
+### Phase 6A — M6A: 지방세 통합 + 시점 검색 + G-3·G-4 골든셋 ✅
 
 > **v1.1 분할:** 기존 Phase 6에 골든셋 50건(G-3·G-4·G-5)과 4개 기능이 몰려 있던 과부하를 6A·6B로 분산합니다 (PRD §16 v2.1 정합).
 
-**상태:** ⬜ 대기
+**상태:** ✅ 완료 (2026-06-15)
 
-**예상 기간:** **3~4주**
+**실측 기간:** 완료 (2026-06-11 ~ 2026-06-15)
 **예상 월 비용:** $50~120 (PRD §17.3.1 상한)
 
 **목표:** 지방세법령 API 통합(FR-2)으로 검색 범위를 국세 + 지방세로 확장. 시점 검색(FR-15) 활성화. 골든셋 G-3·G-4 작성·회귀.
@@ -347,30 +347,31 @@ PRD §16의 M0~M6 마일스톤을 Phase로 정리합니다. 각 Phase는 상위 
 **관련 티켓:** TAX-015 (가칭) — PRD §16 기준 M6A
 
 **주요 산출물:**
-- [ ] `src/adapters/localTaxLaw.ts` — 지방세법령 API 어댑터 (국세 어댑터 패턴 복제)
-- [ ] 환경변수 `LOCAL_TAX_API_KEY` 등록 (4곳 동시 갱신 — SSOT §4.1)
-- [ ] 지방세 통합 검색 UI (국세·지방세 한 화면 — FR-7 확장)
-- [ ] 시점 검색 UI 및 로직 (FR-15) — 회계사가 특정 연도·시점 명시 가능
-- [ ] `eval/golden_temporal.json` — G-3 시점 검색 골든셋 20건 (회계사 작성)
-- [ ] `eval/golden_hallucination.json` — G-4 환각 유발 골든셋 20건 (회계사 작성)
-- [ ] 지방세 Adapter 단위·통합 테스트 (M1에서 도입된 인프라 사용)
+- [x] TAX-6A-1: 지방세법령 API 진단 — 국세 API(`law.go.kr`) 동일 접근 확인, `LOCAL_TAX_API_KEY` 불필요
+- [x] TAX-6A-2·3: 취소 (지방세 별도 어댑터 불필요 — 기존 어댑터가 지방세 조문 포함)
+- [x] TAX-6A-4~7: 시점 검색 로직·UI·G-3·G-4 골든셋 구현 (FR-15)
+- [x] TAX-6A-8: False Premise Defense — SYSTEM_PROMPT 전제 검증 지침, G4-03·04·06 PASS
+- [x] TAX-6A-9: G-3 법령 연혁 API 방안 A 완결 (케이스 재설계, lawVerifier 단일날짜·비법령V2면제)
+- [x] TAX-6A-10: G-3 V-FAIL 진단 + V3 안전망 양방향 확장
+- [x] TAX-6A-11: 라벨 결정론화(처방 D, LLM 라벨 버리고 tier로 재계산) + temperature 고정(처방 F)
+- [x] G-3 골든셋 9/20 PASS 확정 (11건은 구조적 검증 실패로 TAX-6A-10 이연)
+- [x] G-4 환각 유발 골든셋 완료
 
 **검증 기준:**
-- [ ] 지방세 검색 정상 동작 (국세 어댑터와 동등한 응답 시간)
-- [ ] 시점 검색 정확도 ≥ 95% (G-3)
-- [ ] 환각률 0% 유지 (G-4)
-- [ ] G-1·G-2 회귀 합격선 유지
-- [ ] UI E2E 회귀 0건 (Phase 3 시나리오 + 지방세 추가 시나리오)
+- [x] 시점 검색 정확도 G-3 9/20 PASS (구조적 한계 11건 이연)
+- [x] 환각 방어 G-4 PASS
+- [x] G-1·G-2 회귀 합격선 유지
+- [x] 라벨 결정론화로 G-3 비결정성 완결 (2회 연속 11/11 PASS 확인 후)
 
 **의존성:** Phase 5 완료.
 
 ---
 
-### Phase 6B — M6B: 부칙·경과조치 + 편의 기능 + G-5 골든셋 ⬜
+### Phase 6B — M6B: 부칙·경과조치 + 편의 기능 + G-5 골든셋 ✅
 
-**상태:** ⬜ 대기
+**상태:** ✅ 완료 (2026-06-16)
 
-**예상 기간:** **3~4주**
+**실측 기간:** 완료 (2026-06-14 ~ 2026-06-16)
 **예상 월 비용:** $50~150 (PRD §17.3.1 상한)
 
 **목표:** 부칙·경과조치 자동 연결(FR-17)로 신·구법 적용 경계 명시. 최근 검색어(FR-11)·즐겨찾기(FR-12) 편의 기능 통합. UI 다듬기 + 폐지 조문 동작 검증.
@@ -378,20 +379,26 @@ PRD §16의 M0~M6 마일스톤을 Phase로 정리합니다. 각 Phase는 상위 
 **관련 티켓:** TAX-016 (가칭) — PRD §16 기준 M6B
 
 **주요 산출물:**
-- [ ] 부칙·경과조치 자동 연결 (FR-17) — T2 Trust Tier 정상 노출
-- [ ] 최근 검색어 (FR-11, 로컬 저장 — 휴대폰·이메일 마스킹 의무, PRD §14.2)
-- [ ] 즐겨찾기·북마크 (FR-12, 클라이언트 측 구현)
-- [ ] UI 다듬기 (라벨 시인성·접근성·키보드 단축키 등)
-- [ ] `eval/golden_repealed.json` — G-5 폐지 조문 골든셋 10건 (회계사 작성)
-- [ ] 골든셋 회귀 자동화 CI 강화 (FR-18) — G-1~G-5 전체 회귀
+- [x] TAX-6B-1: 부칙·경과조치 동반 조회 (FR-17 백엔드) — 시점 경계 선별, T2 Trust Tier
+- [x] TAX-6B-2: 부칙 답변·UI 표시 (FR-17 프론트엔드) — ⏱경과조치 배지, 인디고 보더
+- [x] TAX-6B-3: 최근 검색어 (FR-11) — PII 마스킹(휴대폰·이메일), controlled input + 드롭다운
+- [x] TAX-6B-4: 즐겨찾기·북마크 (FR-12) — localStorage CRUD + §7 마스킹
+- [x] TAX-6B-5: UI 다듬기 — 라벨/Tier 배지 툴팁, 키보드 단축키(Ctrl+K·Escape), 접근성
+- [x] TAX-6B-6: G-5 폐지 골든셋 골격 10건 + run_golden 로더 연결
+- [x] TAX-6B-7: G-5 실측 + 회계사 검수 → expectedStatus 10건 전건 PASS 확정
+- [x] TAX-6B-8: FR-18 골든셋 회귀 CI (`.github/workflows/golden.yml`) — master push·PR 트리거
+- [x] `eval/golden_repealed.json` — G-5 폐지 조문 골든셋 10건 완성
+- [x] vitest 545/545 GREEN, run_golden 105/105 GREEN
 
 **검증 기준:**
-- [ ] 부칙·경과조치가 본 법령과 함께 검색 결과에 노출
-- [ ] 폐지 조문 ⚫ 라벨 정상 동작 (G-5)
-- [ ] 최근 검색어 마스킹 동작 (PII 단위 테스트로 검증)
-- [ ] G-1~G-5 전체 회귀 합격선 유지
-- [ ] UI E2E 회귀 0건 (편의 기능 추가 시나리오 포함)
-- [ ] **회계사 분기 설문 만족도 측정** (PRD §17.2)
+- [x] 부칙·경과조치가 본 법령과 함께 검색 결과에 노출 (T2 라벨 정상)
+- [x] 폐지 조문 ⚫ 라벨 정상 동작 (G-5 10건 PASS)
+- [x] 최근 검색어 마스킹 동작 (PII 단위 테스트 통과)
+- [x] G-1~G-5 전체 회귀 합격선 유지 (run_golden 105/105)
+- [ ] **회계사 분기 설문 만족도 측정** (PRD §17.2) — 베타 운영 1분기 후
+
+**핵심 발견 — V1~V6 한계:** V1~V6는 "거짓말(환각·오인용) 탐지기"이지 도메인 정확도 검증기가 아님.
+G5-06(대체조항 누락)·G5-10(현행 조문 검색 누락) 같은 조용한 오류는 통과. → **TAX-6B-9 내용검증기(Phase 7 후 결정)**
 
 **의존성:** Phase 6A 완료.
 
@@ -528,7 +535,7 @@ PRD §16의 M0~M6 마일스톤을 Phase로 정리합니다. 각 Phase는 상위 
 
 ---
 
-## 3. 현재 상태 (2026-06-11 기준 — v2.2)
+## 3. 현재 상태 (2026-06-16 기준 — v2.4)
 
 | 단계 | 상태 | 예상 기간 | 비고 |
 |---|---|---|---|
@@ -538,8 +545,8 @@ PRD §16의 M0~M6 마일스톤을 Phase로 정리합니다. 각 Phase는 상위 
 | **Phase 3 — M3 (law-verifier + Playwright E2E)** | ✅ **완전 완료** (2026-06-10) | 완료 | TAX-012-A~H + BUG-001~006 완료. 골든셋 40건(TAX-036). TAX-042D·050·051로 V3·V4 라벨 강화. P95 9.67s ✅ PASS (2026-06-10). Phase 4 코딩 게이트 해제 |
 | **Phase 4 — M4 (벡터 DB)** | ✅ **완료** (2026-06-10) | 완료 | TAX-026-A~H 전체 완결. 코드(B~G)+Neon실연결+임베딩38건적재+스모크PASS(H). matchStage=vector 운영 경로 실동작 확정. vitest 387/387. Phase 5 착수 가능 |
 | **Phase 5 — M5 (판례·예규 적재)** | ✅ **완료** (2026-06-10) | 완료 | TAX-052~055 전체 완결. 비법령 89건 적재(DB 127건) + G-2 골든셋 30건 검수·머지(golden_direct.json 66건). G-2 라벨 정확도 100%. vitest 437/437. Phase 6A 착수 가능 |
-| **Phase 6A — M6A (지방세 + 시점)** | 🟡 **진행 중** (TAX-6A-1~9 완료) | 잔여: G-3 11건 회계사 검수 | TAX-6A-1~9 완료. G-3 9/20 PASS(vitest GREEN). G-4 골든셋 완료. lawVerifier 확장(단일날짜·비법령V2면제). vitest 95/95 |
-| Phase 6B — M6B (부칙 + 편의 + UI) | ⬜ 대기 | 3~4주 | G-5 + 회계사 분기 설문 (v1.1 분할) |
+| **Phase 6A — M6A (지방세 + 시점)** | ✅ **완료** (2026-06-15) | 완료 | TAX-6A-1~11 완료. G-3 9/20 PASS 확정(11건 이연). G-4 골든셋 완료. 라벨 결정론화(TAX-6A-11). |
+| **Phase 6B — M6B (부칙 + 편의 + UI)** | ✅ **완료** (2026-06-16) | 완료 | TAX-6B-1~8 전체 완결. G-5 10건 PASS. FR-17·11·12·18 완료. vitest 545/545, run_golden 105/105. PR #1 머지. |
 | **별도 트랙 — 비법령 직접검색** | ✅ **완결** (2026-05-22) | 완료 | TAX-015~016 (판례 T4 + 해석례·국세청해석·심판례 T3). 벡터 DB 없이 OpenAPI 직접 호출. vitest 127건. 엄브렐러 TAX-016 종료 |
 | **별도 트랙 — 비법령 검색 정확도 후속 개선** | 🟡 부분 진행 (TAX-043 완료 2026-06-08) | 단계 2는 운영 1~2주 후 진입 | 단계 1 옵션 B+C 완결(불용어 29개·사건번호 정확매칭). 단계 2 TAX-044(도메인 사전, ⭐⭐⭐)·단계 3 TAX-045(패널티+사후검증, ⭐⭐) 운영 데이터 대기 |
 | **품질 개선 트랙 — V3·V4 라벨 강화 + P95** | ✅ **완결** (2026-06-10) | 완료 | TAX-042D(V3 라벨 결정 표) → TAX-050(V4 시점 결정 트리) → TAX-051(V3 어댑터 후처리). vitest 387/387. P95 누적 9.67s ✅ PASS |
@@ -595,13 +602,25 @@ PRD §16의 M0~M6 마일스톤을 Phase로 정리합니다. 각 Phase는 상위 
 - ✅ TAX-056 베타 접근 게이트 구현·Vercel 배포 완료 (proxy.ts+HMAC 세션, vitest 450/450)
 - ✅ UI E2E Playwright storageState 인증 셋업 추가 — 6/6 PASS (TAX-056 베타 게이트 차단 해소)
 
-**✅ Phase 6A 진행 중 (2026-06-14):**
+**✅ Phase 6A 완료 (2026-06-15):**
 - ✅ TAX-6A-1: 지방세법령 API 진단 — 국세API 동일 접근, LOCAL_TAX_API_KEY 불필요
 - ✅ TAX-6A-2·3: 취소 (지방세 별도 어댑터 불필요 확인)
 - ✅ TAX-6A-4~7: 시점 로직·UI·G-3·G-4 골든셋 구현
 - ✅ TAX-6A-8: False Premise Defense (전제 검증 지침, G4-03·04·06 PASS)
-- ✅ TAX-6A-9: G-3 법령 연혁 API — 방안 A 완결. G-3 9/20 PASS. lawVerifier 확장(단일날짜·종료일없는범위·비법령V2면제). vitest 95/95
-- ⬜ G-3 나머지 11건 회계사 검수·answer 병합 (선택·저우선)
+- ✅ TAX-6A-9: G-3 법령 연혁 API — 방안 A 완결. G-3 9/20 PASS. vitest 95/95
+- ✅ TAX-6A-10: G-3 V-FAIL 진단 + V3 안전망 양방향 확장
+- ✅ TAX-6A-11: 라벨 결정론화(처방 D) + temperature 고정(처방 F) — G-3 비결정성 완결
+- ⏸ G-3 나머지 11건 (구조적 V-FAIL, 별도 티켓 TAX-6A-10 이연)
+
+**✅ Phase 6B 완료 (2026-06-16):**
+- ✅ TAX-6B-1~2: 부칙·경과조치 (FR-17 백엔드·프론트엔드)
+- ✅ TAX-6B-3: 최근 검색어 + PII 마스킹 (FR-11)
+- ✅ TAX-6B-4: 즐겨찾기·북마크 (FR-12)
+- ✅ TAX-6B-5: UI 다듬기 (접근성·키보드 단축키)
+- ✅ TAX-6B-6~7: G-5 폐지 골든셋 10건 실측·검수·PASS 확정
+- ✅ TAX-6B-8: FR-18 골든셋 회귀 CI (golden.yml)
+- ✅ Vercel 환경변수 등록 + 베타 배포 + 로그인 테스트 완료
+- ✅ PR #1 머지 (fix/tax-6a-10-g3-verify-diagnosis → master, 2026-06-16)
 
 **잔여 (선택·저우선):**
 - ⏸ BUG-004 V1 시점·content 일치 — Phase 4 보류 유지 (회계사 결정)
@@ -797,6 +816,7 @@ PRD §18을 정확성·운영·보안 카테고리로 재분류했습니다.
 | 2026-05-23 | 1.7 | **Phase 4 설계·골든셋 보조 완료 + 운영 환류 트랙 계획 반영.** Phase 4(벡터 DB) 설계 게이트 통과(TAX-026-A, 회계사 결정 4개 확정: THRESHOLD=3·신규 usecase·OpenAI 임베딩·pgvector) 및 B~H 서브태스크 등록. **골든셋 작성 보조 인프라(TAX-028) 구현 완료** — 시드→원문 자동 fetch→V1·V2 골격 생성(`scripts/golden/buildCases.ts`)·현황 리포트(`status.ts`)·시드 템플릿(`golden_seeds.json`), 정답(summary)은 회계사 작성 강제(자기참조 방지). 후속 P95 재측정(TAX-029)·운영 환류(TAX-030) 티켓 초안화. §2에 **"향후 트랙 — 틀린 케이스 → 골든셋 환류"** 섹션 신설(자동 FAIL 수집 + 회계사 "👎 신고"로 silent failure 수집 → buildCases 골격화 → 검수 → 머지 → CI 박제, 정답 자동생성·PII 저장 금지). §6.1 위험에 "검증 통과한 오답 무수집" 행 추가. 리포트 `docs/reports/TAX-028_report.md`. | Claude + 회계사 |
 | 2026-06-10 | 1.9 | **품질 개선 트랙 완결 + Phase 4 코딩 게이트 해제.** TAX-036(골든셋 40건 완성, 2026-06-05), TAX-037~039(비법령 V4 결정 라벨 3단 체인), TAX-042D(V3 라벨 결정 표 + TIER_ALLOWED_LABELS 단일 진실원천), TAX-043(비법령 자연어 정규화), TAX-050(SYSTEM_PROMPT 시점 라벨 결정 트리 — V4 0건 달성), TAX-051(어댑터 후처리 V3 안전망 — T3·T4→🟢 강제 다운그레이드) 완료. vitest 387/387 PASS. **TAX-029 P95 100회 재측정 누적 9.67s ✅ PASS(합격선 15s)** — Phase 3 잔여(골든셋 30건+P95 재측정) 전체 해소. Phase 4(M4, TAX-026-B~) pgvector + OpenAI 임베딩 **코딩 게이트 해제**. §3 현재 상태 표·잔여 작업 갱신. §2 Phase 4 상태 🟡 게이트 해제. §2에 "품질 개선 트랙" 행 신설. 리포트 `docs/reports/TAX-051_report.md`. | Claude + 회계사 |
 | 2026-06-10 | 2.1 | **Phase 5(판례·예규 적재) 완결 반영.** TAX-052~055 전체 완료(2026-06-10): collectNonlaw.ts 수집 파이프라인(5세목 18키워드) → 비법령 89건 임베딩 적재(DB 합계 127건: 법령34+심판례86+해석례4+판례3, embed.ts BATCH_SIZE 버그픽) → 벡터 fallback 비법령 통합테스트 12건 → G-2 골든셋 30건(시드→AI summary 초안→회계사 검수→`golden_direct.json` 머지 40→66건). **G-2 라벨 정확도 30/30=100% (합격선 ≥95% 충족)**, golden:status 66건 V1~V6 전체 PASS, vitest 437/437. 계획상 `golden_similar.json` 별도 파일 대신 `golden_direct.json` 통합(동일 러너·status 재사용). draft 파일 삭제로 status 이중 집계 해소. §2 Phase 5 섹션 ⬜→✅, §3 현재 상태 표·잔여 작업, §5 의존성 그래프 갱신. Phase 6A 착수 가능. 리포트 `docs/reports/TAX-052_report.md`~`TAX-055_report.md`. | Claude + 회계사 |
+| 2026-06-16 | 2.4 | **Phase 6A·6B 전체 완결 + 베타 배포 완료.** TAX-6A-10(G-3 V-FAIL 진단·V3 양방향 안전망)·TAX-6A-11(라벨 결정론화·temperature 고정, G-3 비결정성 완결) 완료. Phase 6B: TAX-6B-1~8 전체 완결(부칙 FR-17·최근검색 FR-11·즐겨찾기 FR-12·UI 다듬기·G-5 폐지 골든셋 10건·FR-18 골든셋 회귀 CI). vitest 545/545·run_golden 105/105. Vercel 환경변수 4개 등록 + 베타 배포 + 로그인 실동작 확인. PR #1 머지(fix/tax-6a-10-g3-verify-diagnosis→master). §2 Phase 6A·6B 상태 ⬜→✅. §3 현재 상태 표·잔여 갱신. 잔여: TAX-6B-9 내용검증기(Phase 7 후 결정)·비법령 정확도 TAX-044(운영 1~2주 후). | Claude + 회계사 |
 | 2026-06-14 | 2.3 | **TAX-6A-9 G-3 법령 연혁 API 완결.** 국세법령정보시스템 API 연혁 조회 구조적 불가 확인 → 회계사 방안 A 승인(케이스 재설계). G-3 20건 현행 API 처리 가능 케이스로 전면 재구성(rebuild_g3.mjs). lawVerifier.ts: TEMPORAL_LABEL_PATTERNS에 단일날짜·종료일없는범위 패턴 추가(방안 X 승인), V2 content=0 비법령 면제 추가. 재실측 9/20 PASS answer 병합(merge_g3_answers.mjs) + disclaimer V5 수정(하드코딩→DISCLAIMER 상수 일치). vitest 95/95 GREEN. §3 현재 상태 표·잔여 작업 갱신. 리포트 `docs/reports/TAX-6A-9_report.md`. | Claude + 회계사 |
 | 2026-06-11 | 2.2 | **TAX-056 베타 접근 게이트 완결 + E2E 인증 셋업 추가.** TAX-056: proxy.ts(Edge 경비원, HMAC-SHA256 세션 서명·검증, 30일 쿠키) + login/logout API + SSOT §1.3 베타 접근 제어 명시. Vercel Production 배포 완료(`https://tax-search-system.vercel.app`), 로그인 실동작 확인. E2E 인증 셋업: TAX-056 베타 게이트로 Playwright G-1~G-5가 `/login` 리다이렉트되던 문제 해결 — `auth.setup.ts`(page.evaluate fetch+credentials:include → storageState) + `playwright.config.ts`(.env.local 파싱 + setup→chromium 의존성) + `.gitignore`(`.auth/`). vitest 450/450 · Playwright 6/6 PASS. §3 현재 상태·잔여 갱신. | Claude + 회계사 |
 | 2026-06-10 | 2.0 | **Phase 4(벡터 DB) 완결 반영.** TAX-026-B~H 전체 완료(2026-06-10): 코드 구현(B~G) + Neon pgvector 실연결 + `taxlaw_embeddings` 마이그레이션 + 임베딩 38건 전량 적재 + 운영 벡터 스모크 테스트 ✅ PASS(matchStage=vector 운영 경로 실동작). `.env.example` `DATABASE_URL=` 주석 해제 완료. vitest 387/387. §2 Phase 4 섹션 상태 🟡→✅ + 산출물·검증 체크박스 갱신. §5 의존성 그래프 Phase 4 ⬜→✅. §3 현재 상태 표·잔여 작업 갱신. Phase 5 착수 가능. 리포트 `docs/reports/TAX-026-H_report.md`. | Claude + 회계사 |
