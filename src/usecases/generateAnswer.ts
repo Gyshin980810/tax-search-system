@@ -1,4 +1,5 @@
-import { detectPii } from '../utils/piiFilter'
+import { createHash } from 'node:crypto'
+import { detectPii, maskPhoneEmail } from '../utils/piiFilter'
 import { AppError } from '../domain/errors'
 import { DISCLAIMER } from '../domain/disclaimer'
 import { computeVerifyDiagnostics } from '../adapters/verifyDiagnostics'
@@ -6,6 +7,7 @@ import type { IQueryRewriterPort } from '../ports/llmQueryRewriterPort'
 import type { ISearchPort } from '../ports/taxLawSearchPort'
 import type { IAnswerGeneratorPort } from '../ports/llmAnswerGeneratorPort'
 import type { ILawVerifierPort } from '../ports/lawVerifierPort'
+import type { IOpsLogPort, OpsQueryLogEntry } from '../ports/opsLogPort'
 import type { LabeledAnswer } from '../domain/LabeledAnswer'
 import type { TemporalContext } from '../domain/TemporalContext'
 import type { TaxLaw } from '../domain/TaxLaw'
@@ -166,6 +168,39 @@ async function runTwoStage<TState>(
   return state
 }
 
+// ─── 운영 로그 헬퍼 (TAX-030-A, FR-23) ──────────────────────────────────────
+
+/** 원본 질문의 SHA-256 해시 앞 16자 — 중복 패턴 집계용(고유키 아님, CLAUDE.md §7) */
+function hashQuery(question: string): string {
+  return createHash('sha256').update(question).digest('hex').slice(0, 16)
+}
+
+/** 자료 목록에서 출처 유형을 중복 제거해 추출 — ['법령','심판례'] 등 */
+function uniqueSourceTypes(items: TaxLaw[]): string[] {
+  return [...new Set(items.map((t) => t.sourceType))]
+}
+
+/** 검증 결과에서 실패(false)한 항목 키만 추출 — ['v2','v3'] 등 */
+function failedChecksOf(result: VerificationResult): string[] {
+  const checks = result.checks
+  return (Object.keys(checks) as Array<keyof typeof checks>).filter((k) => !checks[k])
+}
+
+/**
+ * 운영 로그를 fail-soft로 기록한다 (TAX-030-A).
+ *
+ * - opsLog 미주입(undefined) 시 무동작 — 하위 호환.
+ * - 적재 실패(DB 장애 등)는 내부에서 삼켜 답변 생성을 막지 않는다(fail-soft, CLAUDE.md §7.8).
+ */
+async function safeRecord(opsLog: IOpsLogPort | undefined, entry: OpsQueryLogEntry): Promise<void> {
+  if (!opsLog) return
+  try {
+    await opsLog.recordQuery(entry)
+  } catch {
+    // fail-soft: 로그 적재 실패가 회계사 답변 생성을 막지 않는다
+  }
+}
+
 // ─── Usecase ─────────────────────────────────────────────────────────────────
 
 /**
@@ -191,73 +226,117 @@ export async function generateAnswer(
   verifier: ILawVerifierPort,
   question: string,
   temporal: TemporalContext,
+  opsLog?: IOpsLogPort,
 ): Promise<LabeledAnswer> {
-  // [사전] PII 필터 — 감지 시 PiiDetectedError throw
+  // [사전] PII 필터 — 감지 시 PiiDetectedError throw (운영 로그에 도달하지 않음)
   detectPii(question)
 
-  // [1] 자연어 쿼리 변환
-  const queries = await queryRewriter.rewrite(question, temporal)
+  // 운영 로그 메타데이터 준비 (TAX-030-A) — 식별자 없는 마스킹 질문·해시·소요시간만 수집
+  const startedAt = Date.now()
+  const queryNorm = maskPhoneEmail(question)   // 휴대폰·이메일 마스킹 후 저장 (CLAUDE.md §7)
+  const queryHash = hashQuery(question)
+  let matchStage: MatchStage | undefined
+  let sourceTypes: string[] = []
+  // runTwoStage가 throw하면 finalState를 못 받으므로, isFailure 클로저로 마지막 검증 결과를 캡처한다.
+  let lastVerifyResult: VerificationResult | undefined
 
-  // [2] 외부 API 검색 — 첫 번째 쿼리 사용 (Phase 4에서 다중 쿼리 확장 예정)
-  const searchResult = await searchPort.search(queries[0])
+  try {
+    // [1] 자연어 쿼리 변환
+    const queries = await queryRewriter.rewrite(question, temporal)
 
-  // [2-a] 발췌 인용 대상(citable)과 본문 없는 참고 풀(contentlessRefs) 분리 (TAX-015B)
-  //  본문 없는 판례는 발췌할 수 없으므로 LLM·검증에서 제외한다.
-  //  최종 참고 목록은 답변 생성 후 buildReferences가 구성한다 (TAX-015C 정렬, TAX-015D 확장).
-  const split = splitResults(searchResult.items)
+    // [2] 외부 API 검색 — 첫 번째 쿼리 사용 (Phase 4에서 다중 쿼리 확장 예정)
+    const searchResult = await searchPort.search(queries[0])
+    matchStage = searchResult.matchStage
 
-  // [3] 답변 생성 + 라벨링 + Trust Tier — 본문 있는 자료(citable)만 전달
-  // matchStage 전달: vector/expanded 시 어댑터가 라벨을 강제 하향 (TAX-026-G)
-  const answer = await callGenerate(answerGenerator, split.citable, question, temporal, searchResult.matchStage)
+    // [2-a] 발췌 인용 대상(citable)과 본문 없는 참고 풀(contentlessRefs) 분리 (TAX-015B)
+    //  본문 없는 판례는 발췌할 수 없으므로 LLM·검증에서 제외한다.
+    //  최종 참고 목록은 답변 생성 후 buildReferences가 구성한다 (TAX-015C 정렬, TAX-015D 확장).
+    const split = splitResults(searchResult.items)
+    sourceTypes = uniqueSourceTypes(split.citable)
 
-  // [4] law-verifier V1~V6 검증 + 재시도 정책 (PRD §13.2, CLAUDE.md §6.4)
-  //  V5 자동 부착(Stage 1) → V1/V2~V6 복구(Stage 2) → 여전히 FAIL이면 E-VERIFY-FAIL throw
-  const finalState = await runTwoStage<VerifyState>(
-    {
-      answer,
-      citable: split.citable,
-      contentlessRefs: split.contentlessRefs,
-      verifyResult: await verifier.verify(answer, split.citable),
-    },
-    {
-      isFailure: (s) => s.verifyResult.status === 'FAIL',
+    // [3] 답변 생성 + 라벨링 + Trust Tier — 본문 있는 자료(citable)만 전달
+    // matchStage 전달: vector/expanded 시 어댑터가 라벨을 강제 하향 (TAX-026-G)
+    const answer = await callGenerate(answerGenerator, split.citable, question, temporal, searchResult.matchStage)
 
-      // Stage 1: V5 면책 고지 자동 부착 — 재생성 없이 DISCLAIMER 주입 후 재검증
-      preRetry: async (s) => {
-        if (s.verifyResult.checks.v5) return s
-        const ans = { ...s.answer, disclaimer: DISCLAIMER }
-        const vr  = await verifier.verify(ans, s.citable)
-        return { ...s, answer: ans, verifyResult: vr }
+    // [4] law-verifier V1~V6 검증 + 재시도 정책 (PRD §13.2, CLAUDE.md §6.4)
+    //  V5 자동 부착(Stage 1) → V1/V2~V6 복구(Stage 2) → 여전히 FAIL이면 E-VERIFY-FAIL throw
+    const finalState = await runTwoStage<VerifyState>(
+      {
+        answer,
+        citable: split.citable,
+        contentlessRefs: split.contentlessRefs,
+        verifyResult: await verifier.verify(answer, split.citable),
       },
+      {
+        isFailure: (s) => {
+          // 운영 로그용: throw 직전 마지막 검증 결과를 캡처 (검증 판정 로직 무변경)
+          lastVerifyResult = s.verifyResult
+          return s.verifyResult.status === 'FAIL'
+        },
 
-      // Stage 2: V1(재검색+재생성) 또는 V2~V6(재생성) 복구 후 재검증
-      recover: async (s) => {
-        if (!s.verifyResult.checks.v1) {
-          // V1 경로: 재검색 → 재분리 → 재생성 → 재검증 (참고 풀도 갱신)
-          const sr       = await searchPort.search(queries[0])
-          const newSplit = splitResults(sr.items)
-          const ans      = await callGenerate(answerGenerator, newSplit.citable, question, temporal, sr.matchStage)
-          const vr       = await verifier.verify(ans, newSplit.citable)
-          return { answer: ans, citable: newSplit.citable, contentlessRefs: newSplit.contentlessRefs, verifyResult: vr }
-        }
-        // V2~V6 경로: 재생성 → 재검증
-        const ans = await callGenerate(answerGenerator, s.citable, question, temporal, searchResult.matchStage)
-        const vr  = await verifier.verify(ans, s.citable)
-        return { ...s, answer: ans, verifyResult: vr }
+        // Stage 1: V5 면책 고지 자동 부착 — 재생성 없이 DISCLAIMER 주입 후 재검증
+        preRetry: async (s) => {
+          if (s.verifyResult.checks.v5) return s
+          const ans = { ...s.answer, disclaimer: DISCLAIMER }
+          const vr  = await verifier.verify(ans, s.citable)
+          return { ...s, answer: ans, verifyResult: vr }
+        },
+
+        // Stage 2: V1(재검색+재생성) 또는 V2~V6(재생성) 복구 후 재검증
+        recover: async (s) => {
+          if (!s.verifyResult.checks.v1) {
+            // V1 경로: 재검색 → 재분리 → 재생성 → 재검증 (참고 풀도 갱신)
+            const sr       = await searchPort.search(queries[0])
+            const newSplit = splitResults(sr.items)
+            const ans      = await callGenerate(answerGenerator, newSplit.citable, question, temporal, sr.matchStage)
+            const vr       = await verifier.verify(ans, newSplit.citable)
+            return { answer: ans, citable: newSplit.citable, contentlessRefs: newSplit.contentlessRefs, verifyResult: vr }
+          }
+          // V2~V6 경로: 재생성 → 재검증
+          const ans = await callGenerate(answerGenerator, s.citable, question, temporal, searchResult.matchStage)
+          const vr  = await verifier.verify(ans, s.citable)
+          return { ...s, answer: ans, verifyResult: vr }
+        },
       },
-    },
-  )
+    )
 
-  // 최종 참고 목록 구성 (TAX-015D): 본문 없는 자료 + 인용 안 된 해석례·판례, 관련도순 상위 N건
-  const references = buildReferences(
-    finalState.citable,
-    finalState.contentlessRefs,
-    finalState.answer.citations,
-    queries[0].keyword,
-  )
-  // TAX-042D Stage 4 풀세트 보강 E·F·G — V3 라벨 적정성 진단 마커 부착.
-  //   V3 PASS/FAIL 판정은 lawVerifier가 단독 수행하며, 본 호출은 운영 로그·후속 측정용
-  //   진단 신호만 제공한다(CLAUDE.md §6.4 무변경 보호).
-  const diagnostics = computeVerifyDiagnostics(finalState.answer)
-  return { ...finalState.answer, references, verificationResult: finalState.verifyResult, diagnostics }
+    // 최종 참고 목록 구성 (TAX-015D): 본문 없는 자료 + 인용 안 된 해석례·판례, 관련도순 상위 N건
+    const references = buildReferences(
+      finalState.citable,
+      finalState.contentlessRefs,
+      finalState.answer.citations,
+      queries[0].keyword,
+    )
+    // TAX-042D Stage 4 풀세트 보강 E·F·G — V3 라벨 적정성 진단 마커 부착.
+    //   V3 PASS/FAIL 판정은 lawVerifier가 단독 수행하며, 본 호출은 운영 로그·후속 측정용
+    //   진단 신호만 제공한다(CLAUDE.md §6.4 무변경 보호).
+    const diagnostics = computeVerifyDiagnostics(finalState.answer)
+
+    // [운영 로그] 성공 경로 기록 (TAX-030-A) — V1 재검색 시 갱신될 수 있어 finalState 기준
+    await safeRecord(opsLog, {
+      queryNorm,
+      queryHash,
+      matchStage,
+      sourceTypes: uniqueSourceTypes(finalState.citable),
+      verifyStatus: 'PASS',
+      failedChecks: [],
+      latencyMs: Date.now() - startedAt,
+    })
+
+    return { ...finalState.answer, references, verificationResult: finalState.verifyResult, diagnostics }
+  } catch (err) {
+    // [운영 로그] E-VERIFY-FAIL 경로도 기록한 뒤 그대로 전파 (TAX-030-A, fail-soft)
+    if (err instanceof AppError && err.code === 'E-VERIFY-FAIL') {
+      await safeRecord(opsLog, {
+        queryNorm,
+        queryHash,
+        matchStage,
+        sourceTypes,
+        verifyStatus: 'FAIL',
+        failedChecks: lastVerifyResult ? failedChecksOf(lastVerifyResult) : [],
+        latencyMs: Date.now() - startedAt,
+      })
+    }
+    throw err
+  }
 }

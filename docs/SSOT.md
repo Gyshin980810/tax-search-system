@@ -7,8 +7,8 @@
 >
 > 문서 위계: `SSOT.md`(헌법) > `PRD.md`(사양서) > `CLAUDE.md`(행동 요약) > 티켓
 >
-> 작성일: 2026-04-24 (v1.0) / 갱신: 2026-05-04 (v2.0) / 2026-05-14 (v2.1) / 2026-05-22 (v2.2) / 2026-05-25 (v2.3) / 2026-06-05 (v2.4) / 2026-06-05 (v2.5)
-> 버전: 2.5
+> 작성일: 2026-04-24 (v1.0) / 갱신: 2026-05-04 (v2.0) / 2026-05-14 (v2.1) / 2026-05-22 (v2.2) / 2026-05-25 (v2.3) / 2026-06-05 (v2.4) / 2026-06-05 (v2.5) / 2026-06-16 (v2.6)
+> 버전: 2.6
 
 ---
 
@@ -62,10 +62,10 @@
 |---|---|---|
 | `app/` | UI 페이지, API Route | Next.js App Router |
 | `app/api/` | HTTP 진입점 | Usecase 호출만, 비즈니스 로직 금지 |
-| `src/domain/` | 엔티티·값 객체 | TaxLaw, SearchQuery, LabeledAnswer, VerificationResult, TemporalContext, Citation, **ImpactMap·ImpactNode·ImpactEdge** (TAX-033), relatedLawParser·mermaid (TAX-033) |
+| `src/domain/` | 엔티티·값 객체 | TaxLaw, SearchQuery, LabeledAnswer, VerificationResult, TemporalContext, Citation, **ImpactMap·ImpactNode·ImpactEdge** (TAX-033), relatedLawParser·mermaid (TAX-033), **OpsQueryLog·OpsFeedback·contentVerify** (TAX-030/6B-9, 운영 환류 — FR-23/24/25) |
 | `src/usecases/` | 애플리케이션 로직 | RAG 5단계 오케스트레이션, **buildImpactMap** (TAX-033) |
-| `src/adapters/` | 외부 시스템 연동 | nationalTaxLaw·localTaxLaw·llmQueryRewriter·llmAnswerGenerator·lawVerifier |
-| `src/ports/` | 인터페이스 정의 | 어댑터 교체 가능 (Port·Adapter 패턴), **IImpactMapPort** (TAX-033) |
+| `src/adapters/` | 외부 시스템 연동 | nationalTaxLaw·localTaxLaw·llmQueryRewriter·llmAnswerGenerator·lawVerifier, **opsLog** (Pg/Null, fail-soft — TAX-030-A) |
+| `src/ports/` | 인터페이스 정의 | 어댑터 교체 가능 (Port·Adapter 패턴), **IImpactMapPort** (TAX-033), **IOpsLogPort** (TAX-030-A) |
 | `src/config.ts` | 환경변수 검증 | Fail-fast 구현 (§5.3) |
 | `.claude/agents/` | Claude Code 서브에이전트 | `law-verifier.md` (TAX-003에서 작성) |
 | `docs/` | 문서 허브 | SSOT, PRD, 티켓, 리포트 |
@@ -356,6 +356,14 @@ for (const key of required) {
 - ❌ 에러 리포트에 사용자 식별자(이메일·이름·IP) 포함 금지
 - ✅ 휴대폰·이메일은 마스킹 후 저장 (`010-****-****`, `u***@d***`)
 
+**운영 로그 적재 규칙 (v2.6 신설 — FR-23/24, 운영 환류 트랙):**
+
+- ✅ 운영 쿼리 로그(`ops_query_log`)·신고 로그(`ops_feedback`)는 **저장 직전 본 §7.8 마스킹을 그대로 적용**한다 (`detectPii` 입력 거부 + `maskPhoneEmail` 마스킹).
+- ✅ `query_norm` 컬럼에는 **마스킹된 정규화 쿼리만** 저장한다.
+- ❌ 회계사 식별자(이메일·이름·IP)·세션 ID는 **어떤 컬럼에도 저장 금지** (스키마에 식별자 컬럼 자체를 두지 않는다).
+- ✅ 수집은 **fail-soft** — 로그 적재 실패가 답변 생성·노출을 throw 하지 않는다 (§6 Fail-fast의 예외: 운영 로그는 비핵심 부수효과).
+- ❌ 정답(`summary`·`expectedStatus`·`expectedContent`) **자동 생성 금지** — 환류 시 회계사 검수 필수 (자기참조 채점 방지).
+
 ---
 
 ## 8. AI 도구 작업 지침
@@ -517,6 +525,13 @@ for (const key of required) {
 - ✅ 골든셋 추가·수정은 별도 티켓으로 처리
 - ✅ 각 항목은 PRD §15.1.2의 스키마(`id`, `question`, `expected_label`, `expected_citations`, `must_not_cite` 등)를 따른다
 
+**내용 검증기용 `expectedContent` 필드 (v2.6 신설 — FR-25 / TAX-6B-9 방안 A):**
+
+- ✅ 골든셋 항목에 선택적 `expectedContent: { mustInclude: string[], mustExclude: string[] }` 필드를 둘 수 있다 (도메인 정확도 = "조용한 틀림" 탐지용).
+- ✅ `expectedContent` 값은 **회계사가 작성·검수**한다 (정답 자동 생성 금지 — §13.2 동일 원칙).
+- ✅ 내용 검증기(`src/domain/contentVerify.ts`)는 **law-verifier V1~V6와 완전 분리**된 별도 순수 함수 레이어이며, V1~V6 검증 로직을 변경하지 않는다.
+- ✅ 내용 검증 결과는 CI 골든셋 회귀(§13.3, FR-18)에 편입한다.
+
 ### 13.3 합격선 (M3 이후 PR마다 자동 검증)
 
 | 지표 | 합격선 |
@@ -577,6 +592,7 @@ for (const key of required) {
 | 2026-05-25 | 2.3 | **심판례 관계 그래프(Impact Map) 정합 — TAX-035.** §2 디렉토리 책임에 `src/domain/` ImpactMap·ImpactNode·ImpactEdge·relatedLawParser·mermaid, `src/usecases/` buildImpactMap, `src/ports/` IImpactMapPort 추가(TAX-033). §11.2 차기 목록에 FR-21(심판례 관계 그래프 코어 ✅ 완료)·FR-22(심판례 카드 UI ✅ 완료) 추가. 코드 변경 없음(문서 정합 전용). | Claude + 회계사 |
 | 2026-06-05 | 2.4 | **비법령 V4 시점 라벨 사양 정합 — TAX-037.** §7.2 시점 라벨 목록에 `[결정: YYYY.MM.DD]`(비법령 결정·선고·회신일용) 추가 + 결정일 불명 시 `[현행]` 허용 안내. `lawVerifier.ts` V4 정규식에 `[결정: ...]` 패턴 추가(코드 변경). `buildNonlawCases.ts` `buildTemporalLabel()` 임시 처리 제거. 골든셋 비법령 4건 `[현행]` → `[결정: YYYY.MM.DD]` 갱신. PRD §6.4.1·CLAUDE.md §6.2 동일 정합. | Claude + 회계사 |
 | 2026-06-05 | 2.5 | **비법령 어댑터 매핑 회귀 방지 — TAX-039.** §7.2에 비법령 자료 어댑터 매핑 표 신설(외부 API 필드 → 도메인 `caseNumber`·`issuingBody`·`decisionDate`·`articleTitle`·`content`·`sourceType` 정규화 규칙). 매핑 누락 시 V4 폴백으로 결정일 맥락이 손실됨을 명시. `tests/integration/nationalTaxLaw.test.ts`에 4트랙(판례·법제처해석례·국세청해석·심판례) `decisionDate` 정규식 회귀 단언 추가(어댑터 코드 무변경). | Claude + 회계사 |
+| 2026-06-16 | 2.6 | **Phase 7(운영 데이터 환류) 정식 기능 정합 — 회계사 결정 3건 반영.** §2 디렉토리 책임 표에 `src/domain/` OpsQueryLog·OpsFeedback·contentVerify(FR-23/24/25), `src/adapters/` opsLog(Pg/Null, fail-soft, TAX-030-A), `src/ports/` IOpsLogPort 추가. §7.8 개인정보 처리에 운영 로그 적재 규칙 신설(저장 직전 마스킹 적용·`query_norm` 마스킹만·식별자 컬럼 미존재·fail-soft·정답 자동생성 금지). §13.2에 내용 검증기용 `expectedContent`(mustInclude/mustExclude, 회계사 작성) 필드 + V1~V6 완전 분리·CI 편입 규칙 신설. 회계사 결정 3건: ①운영 데이터 저장소=기존 Neon Postgres 재사용(파일 저장은 Vercel 서버리스 휘발로 폐기, 신규 환경변수 없음) ②수집 범위=성공 쿼리 포함 전부 ③내용 검증기=방안 A(규칙 기반). PRD v2.5·ROADMAP v2.5와 동기. 코드 변경 없음(문서 정합 전용). | Claude + 회계사 |
 
 ---
 
