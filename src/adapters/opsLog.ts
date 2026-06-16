@@ -1,6 +1,11 @@
 import 'server-only'
 import { Pool } from 'pg'
-import type { IOpsLogPort, OpsQueryLogEntry, OpsFeedbackEntry } from '../ports/opsLogPort'
+import type {
+  IOpsLogPort,
+  OpsQueryLogEntry,
+  OpsFeedbackEntry,
+  OpsFeedbackRow,
+} from '../ports/opsLogPort'
 
 /**
  * 운영 쿼리 로그 어댑터 — Neon Postgres INSERT (TAX-030-A, FR-23)
@@ -42,6 +47,34 @@ export class PgOpsLogAdapter implements IOpsLogPort {
       [entry.queryHash, entry.queryNorm, entry.reason, entry.sourceTypes],
     )
   }
+
+  // 신고 환류 집계 조회 (TAX-030-C) — query_hash로 묶어 빈도순 정렬, 읽기 전용
+  // query_norm·source_types는 가장 최근 신고분을 대표값으로, reason은 빈 값 제외 후 모음.
+  async listFeedback(): Promise<OpsFeedbackRow[]> {
+    const { rows } = await this.pool.query(
+      `SELECT
+         query_hash,
+         (array_agg(query_norm ORDER BY created_at DESC))[1]   AS query_norm,
+         (array_agg(source_types ORDER BY created_at DESC))[1] AS source_types,
+         array_remove(array_agg(NULLIF(reason, '') ORDER BY created_at DESC), NULL) AS reasons,
+         COUNT(*)::int                                         AS report_count,
+         MAX(created_at)                                       AS last_reported_at
+       FROM ops_feedback
+       GROUP BY query_hash
+       ORDER BY report_count DESC, last_reported_at DESC`,
+    )
+    return rows.map((r) => ({
+      queryHash: r.query_hash,
+      queryNorm: r.query_norm,
+      sourceTypes: r.source_types ?? [],
+      reasons: r.reasons ?? [],
+      reportCount: r.report_count,
+      lastReportedAt:
+        r.last_reported_at instanceof Date
+          ? r.last_reported_at.toISOString()
+          : String(r.last_reported_at),
+    }))
+  }
 }
 
 /**
@@ -57,5 +90,10 @@ export class NullOpsLogAdapter implements IOpsLogPort {
 
   async recordFeedback(_entry: OpsFeedbackEntry): Promise<void> {
     // no-op: 수집 비활성 환경 — 신고는 조용히 건너뛴다(로컬·테스트용)
+  }
+
+  async listFeedback(): Promise<OpsFeedbackRow[]> {
+    // no-op: 수집 비활성 환경 — 집계할 신고가 없으므로 빈 배열
+    return []
   }
 }

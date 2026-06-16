@@ -8,6 +8,7 @@ function makeOpsLog(): IOpsLogPort {
   return {
     recordQuery: vi.fn().mockResolvedValue(undefined),
     recordFeedback: vi.fn().mockResolvedValue(undefined),
+    listFeedback: vi.fn().mockResolvedValue([]),
   }
 }
 

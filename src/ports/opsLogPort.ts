@@ -44,15 +44,43 @@ export interface OpsFeedbackEntry {
 }
 
 /**
- * 운영 로그 Port 인터페이스 (TAX-030-A·B)
+ * 신고 환류 집계 1행 (TAX-030-C)
  *
- * Usecase는 이 Port만 호출하고 DB I/O는 어댑터에 위임한다 (CLAUDE.md §4).
+ * `ops_feedback`을 queryHash로 묶어 "같은 질문이 몇 번 신고됐는지"를 집계한 결과다.
+ * 골든셋 환류(harvestToSeeds.ts)가 회계사 검토용 리뷰 리포트를 만들 때 사용한다.
+ *
+ * ⚠️ 어떤 조문이 정답인지(lawName·articleNumber)는 ops_feedback에 구조적으로 없다 —
+ *    그 판단은 세법 정답이므로 회계사가 직접 채운다 (CLAUDE.md §6.3, 티켓 §3.2).
+ *    회계사 식별 정보(이메일·이름·IP)도 일절 포함하지 않는다 (CLAUDE.md §7).
+ */
+export interface OpsFeedbackRow {
+  /** SHA-256(원본질문) 앞 16자 — 같은 질문 묶음 식별자 */
+  queryHash: string
+  /** 마스킹된 질문(대표값) — 같은 묶음 중 가장 최근 신고분 */
+  queryNorm: string
+  /** 마스킹된 신고 사유 모음 — 빈 사유는 제외 (신고마다 다를 수 있어 배열) */
+  reasons: string[]
+  /** 답변에 사용된 출처 유형(대표값) — 가장 최근 신고분 */
+  sourceTypes: string[]
+  /** 신고 횟수 — 빈도순 정렬·우선순위 판단용 */
+  reportCount: number
+  /** 마지막 신고 시각 (ISO 문자열) */
+  lastReportedAt: string
+}
+
+/**
+ * 운영 로그 Port 인터페이스 (TAX-030-A·B·C)
+ *
+ * Usecase·스크립트는 이 Port만 호출하고 DB I/O는 어댑터에 위임한다 (CLAUDE.md §4).
  * - recordQuery: 쿼리 처리 메타데이터(fail-soft, 호출 측에서 예외 삼킴 — TAX-030-A)
  * - recordFeedback: 회계사 명시 신고. fail-soft 아님 — 적재 실패는 호출 측에 전파(TAX-030-B)
+ * - listFeedback: 신고 환류용 집계 조회(읽기 전용 — TAX-030-C)
  */
 export interface IOpsLogPort {
   /** 쿼리 처리 메타데이터 1건을 적재한다 */
   recordQuery(entry: OpsQueryLogEntry): Promise<void>
   /** 회계사 "조용한 틀림" 신고 1건을 적재한다 */
   recordFeedback(entry: OpsFeedbackEntry): Promise<void>
+  /** 신고를 queryHash로 묶어 빈도순으로 집계해 반환한다 (환류 리포트용) */
+  listFeedback(): Promise<OpsFeedbackRow[]>
 }

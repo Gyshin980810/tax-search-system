@@ -644,6 +644,7 @@ describe('generateAnswer Usecase', () => {
       return {
         recordQuery: vi.fn().mockResolvedValue(undefined),
         recordFeedback: vi.fn().mockResolvedValue(undefined),
+        listFeedback: vi.fn().mockResolvedValue([]),
       }
     }
 
@@ -690,6 +691,7 @@ describe('generateAnswer Usecase', () => {
       const opsLog: IOpsLogPort = {
         recordQuery: vi.fn().mockRejectedValue(new Error('DB down')),
         recordFeedback: vi.fn().mockResolvedValue(undefined),
+        listFeedback: vi.fn().mockResolvedValue([]),
       }
 
       const result = await generateAnswer(
