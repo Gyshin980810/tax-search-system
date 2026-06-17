@@ -1,0 +1,10 @@
+# 배포 업로드에서 제외할 항목 (vercel CLI 직접 배포 시 적용)
+# git 미추적이라 GitHub 자동배포엔 없지만, `vercel --prod` 로컬 업로드 시
+# 함께 올라가 타입체크를 깨뜨리므로 명시적으로 제외한다.
+
+# 로컬 전용 도구 (우리 앱과 무관한 별도 MCP 서버)
+mcp-shrimp-task-manager/
+
+# 로컬 시크릿 (프로덕션은 Vercel 환경변수 사용)
+.env.local
+.env*.local
