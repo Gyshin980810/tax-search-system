@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS taxlaw_embeddings (
   case_number      TEXT,                     -- 비법령 식별자 (판례 사건번호 등)
   article_title    TEXT,
   content          TEXT NOT NULL,            -- 원문 보존 (§6.1 변형 금지)
-  embedding        vector(1536),             -- text-embedding-3-small 1536차원
+  embedding        vector(1024),             -- voyage-4 1024차원 (TAX-6B-15, 이전 text-embedding-3-small 1536에서 전환)
   revision_date    DATE,
   enforcement_date DATE,
   source_url       TEXT NOT NULL,            -- OC 키 미포함 (CLAUDE.md §7)

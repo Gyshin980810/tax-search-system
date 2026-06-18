@@ -15,20 +15,20 @@
  */
 
 import 'server-only'
-import { OpenAIEmbeddingAdapter } from '../src/adapters/embedding'
+import { VoyageEmbeddingAdapter } from '../src/adapters/embedding'
 import { PgVectorSearchAdapter } from '../src/adapters/vectorSearch'
 import { NationalTaxLawAdapter } from '../src/adapters/nationalTaxLaw'
 import { FallbackSearchPort } from '../src/usecases/searchWithFallback'
 
 const DATABASE_URL = process.env.DATABASE_URL
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY
+const VOYAGE_API_KEY = process.env.VOYAGE_API_KEY
 
 if (!DATABASE_URL) {
   console.error('[smoke] DATABASE_URL 환경변수가 필요합니다.')
   process.exit(1)
 }
-if (!OPENAI_API_KEY) {
-  console.error('[smoke] OPENAI_API_KEY 환경변수가 필요합니다.')
+if (!VOYAGE_API_KEY) {
+  console.error('[smoke] VOYAGE_API_KEY 환경변수가 필요합니다.')
   process.exit(1)
 }
 
@@ -48,7 +48,7 @@ const NONLAW_QUERIES = [
 ]
 
 async function main() {
-  const embedder = new OpenAIEmbeddingAdapter(OPENAI_API_KEY!)
+  const embedder = new VoyageEmbeddingAdapter(VOYAGE_API_KEY!)
   const vectorPort = new PgVectorSearchAdapter(DATABASE_URL!)
 
   // ─── [A] 벡터 검색 직접 동작 ──────────────────────────────────────────
