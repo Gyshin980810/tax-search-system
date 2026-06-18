@@ -7,6 +7,10 @@ if (!process.env.NATIONAL_TAX_API_KEY) {
 if (!process.env.OPENAI_API_KEY) {
   process.env.OPENAI_API_KEY = 'test-openai-key-for-vitest'
 }
+// Voyage 임베딩 키 (TAX-6B-15) — config.ts requireEnv 통과용 더미
+if (!process.env.VOYAGE_API_KEY) {
+  process.env.VOYAGE_API_KEY = 'test-voyage-key-for-vitest'
+}
 // 베타 접근 게이트 환경변수 (TAX-056) — config.ts requireEnv 통과용 더미
 if (!process.env.BETA_ACCESS_CODE) {
   process.env.BETA_ACCESS_CODE = 'test-beta-access-code'

@@ -28,7 +28,7 @@ import { OpenAIQueryRewriterAdapter } from '../../src/adapters/llmQueryRewriter'
 import { NationalTaxLawAdapter } from '../../src/adapters/nationalTaxLaw'
 import { OpenAIAnswerGeneratorAdapter } from '../../src/adapters/llmAnswerGenerator'
 import { LawVerifierAdapter } from '../../src/adapters/lawVerifier'
-import { OpenAIEmbeddingAdapter } from '../../src/adapters/embedding'
+import { VoyageEmbeddingAdapter } from '../../src/adapters/embedding'
 import { PgVectorSearchAdapter } from '../../src/adapters/vectorSearch'
 import { generateAnswer } from '../../src/usecases/generateAnswer'
 import { AppError, type ErrorCode } from '../../src/domain/errors'
@@ -267,9 +267,9 @@ async function main(): Promise<void> {
   const realVerifier = new LawVerifierAdapter()
 
   // TAX-6B-14 — 운영 진입점(app/api/answer/route.ts)과 동일한 부가 포트 주입.
-  //  embeddingPort: OPENAI_API_KEY만 있으면 항상 활성(의미 재정렬, TAX-6B-12).
+  //  embeddingPort: VOYAGE_API_KEY만 있으면 항상 활성(의미 재정렬, TAX-6B-12 / voyage-4 전환 TAX-6B-15).
   //  vectorSearchPort: DATABASE_URL 있을 때만 활성(판례 라이브 검색, TAX-6B-14). 없으면 판례 경로는 우회.
-  const realEmbeddingPort = new OpenAIEmbeddingAdapter(config.openaiApiKey)
+  const realEmbeddingPort = new VoyageEmbeddingAdapter(config.voyageApiKey)
   const realVectorSearchPort = config.databaseUrl
     ? new PgVectorSearchAdapter(config.databaseUrl)
     : undefined

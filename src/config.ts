@@ -45,6 +45,13 @@ export const config = {
   nationalTaxApiKey: requireEnv('NATIONAL_TAX_API_KEY'),
   openaiApiKey: requireEnv('OPENAI_API_KEY'),
   /**
+   * Voyage 임베딩 API 키 (TAX-6B-15).
+   * 의미 검색·판례 임베딩을 voyage-4로 전환하면서 신규 추가.
+   * 답변 생성(GPT-4o-mini)은 여전히 OPENAI_API_KEY를 쓰므로 두 키가 모두 필요하다.
+   * ⚠️ 배포 순서: 코드 머지 → Vercel에 VOYAGE_API_KEY 등록 → 재배포 (미등록 시 앱 기동 실패).
+   */
+  voyageApiKey: requireEnv('VOYAGE_API_KEY'),
+  /**
    * 베타 접근 게이트 (TAX-056).
    * 회계사 지인 소수 베타 배포 시 단일 공유 패스코드로 접근을 제한합니다.
    * betaAccessCode: 공유 패스코드 / sessionSecret: 쿠키 서명용 비밀키.

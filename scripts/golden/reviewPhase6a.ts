@@ -25,7 +25,7 @@ import { performance } from 'node:perf_hooks'
 import { OpenAIQueryRewriterAdapter } from '../../src/adapters/llmQueryRewriter'
 import { NationalTaxLawAdapter } from '../../src/adapters/nationalTaxLaw'
 import { OpenAIAnswerGeneratorAdapter } from '../../src/adapters/llmAnswerGenerator'
-import { OpenAIEmbeddingAdapter } from '../../src/adapters/embedding'
+import { VoyageEmbeddingAdapter } from '../../src/adapters/embedding'
 import { PgVectorSearchAdapter } from '../../src/adapters/vectorSearch'
 import { LawVerifierAdapter } from '../../src/adapters/lawVerifier'
 import { FallbackSearchPort } from '../../src/usecases/searchWithFallback'
@@ -105,7 +105,7 @@ async function main(): Promise<void> {
   const searchPort: ISearchPort = config.databaseUrl
     ? new FallbackSearchPort(
         directPort,
-        new OpenAIEmbeddingAdapter(config.openaiApiKey),
+        new VoyageEmbeddingAdapter(config.voyageApiKey),
         new PgVectorSearchAdapter(config.databaseUrl),
       )
     : directPort
