@@ -44,6 +44,17 @@ next-env.d.ts
 # 골든셋 작성 보조 — 자동 생성 초안(검수 전, 회귀 게이트 비대상) (TAX-028)
 eval/golden_direct.draft.json
 
+# 판례 변환 결과물 (대용량, 적재용 중간 산출물 — git 미커밋) (TAX-6B-13/16)
+scripts/precedent_poc.json
+scripts/precedent_full.json
+
+# 적재·진단 임시 파일 (TAX-6B-16)
+scripts/_*.mjs
+scripts/_*.log
+
+# 로컬 논의용 메모 (git 미추적 — 로컬에서만 사용)
+세법 검색 및 RAG 시스템 아키텍처 가이드.md
+
 # 서드파티 MCP 도구 (로컬 복사본, 외부 의존성)
 mcp-shrimp-task-manager/
 claude-agents-main/
