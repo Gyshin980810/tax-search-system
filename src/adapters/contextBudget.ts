@@ -10,8 +10,9 @@ import type { TaxLaw, TrustTier } from '../domain/TaxLaw'
  *   queryRewriter가 광범위 키워드를 생성하는 근본 원인은 TAX-042G로 분리.
  *
  * 처방 (korean-law-mcp 검증 패턴 이식):
- *   A. compactLawContent — decision-compact.ts:36 패턴. 본문 앞 1500자 + 중략
- *      마커 + 뒤 500자. 한국어 종결어미 가드(한다/있다/본다/정한다).
+ *   A. compactLawContent — decision-compact.ts:36 패턴. 본문 앞 800자 + 중략
+ *      마커 + 뒤 200자. 한국어 종결어미 가드(한다/있다/본다/정한다).
+ *      (TAX-6B-17: 1500/500→800/200, generate 지연 감소)
  *   B. densifyArticleRefs — densifyLawRefs:99 패턴. "제26조(법인세 과세표준의
  *      계산)" → "제26조". 5% 미만 절감 시 원본 유지.
  *   C. truncateForContext — Tier 정렬(T1→T2→T3→T4) + 질문 키워드 매칭 가중치
@@ -27,9 +28,10 @@ import type { TaxLaw, TrustTier } from '../domain/TaxLaw'
 /**
  * 안전 입력 토큰 한도.
  * GPT-4o-mini 128K = (시스템 프롬프트 + 회계사 질문 + 메타 약 16K) +
- * (출력 16K 예약) + (안전 마진) 후 60K로 보수적 책정 (인간 승인 2026-06-07).
+ * (출력 16K 예약) + (안전 마진) 후 35K로 책정 (TAX-6B-17: 60K→35K,
+ * G3 generate 14~20s 지연 해소, 인간 승인 2026-06-18).
  */
-export const SAFE_INPUT_TOKENS = 60_000
+export const SAFE_INPUT_TOKENS = 35_000
 
 /** Trust Tier 우선순위 (낮을수록 우선 보존). */
 export const TIER_RANK: Record<TrustTier, number> = { T1: 1, T2: 2, T3: 3, T4: 4 }
@@ -71,8 +73,8 @@ export interface CompactOptions {
 export function compactLawContent(content: string, opts: CompactOptions = {}): string {
   if (opts.full || !content) return content
 
-  const HEAD = 1500
-  const TAIL = 500
+  const HEAD = 800
+  const TAIL = 200
   const MIN_SAVE = 1000
 
   if (content.length <= HEAD + TAIL + MIN_SAVE) return content
