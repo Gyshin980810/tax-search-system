@@ -28,13 +28,18 @@ import { OpenAIQueryRewriterAdapter } from '../../src/adapters/llmQueryRewriter'
 import { NationalTaxLawAdapter } from '../../src/adapters/nationalTaxLaw'
 import { OpenAIAnswerGeneratorAdapter } from '../../src/adapters/llmAnswerGenerator'
 import { LawVerifierAdapter } from '../../src/adapters/lawVerifier'
+import { OpenAIEmbeddingAdapter } from '../../src/adapters/embedding'
+import { PgVectorSearchAdapter } from '../../src/adapters/vectorSearch'
 import { generateAnswer } from '../../src/usecases/generateAnswer'
 import { AppError, type ErrorCode } from '../../src/domain/errors'
+import { config } from '../../src/config'
 
 import type { IQueryRewriterPort } from '../../src/ports/llmQueryRewriterPort'
 import type { ISearchPort } from '../../src/ports/taxLawSearchPort'
 import type { IAnswerGeneratorPort } from '../../src/ports/llmAnswerGeneratorPort'
 import type { ILawVerifierPort } from '../../src/ports/lawVerifierPort'
+import type { IEmbeddingPort } from '../../src/ports/embeddingPort'
+import type { IVectorSearchPort } from '../../src/ports/vectorSearchPort'
 import type { TemporalContext } from '../../src/domain/TemporalContext'
 import type { VerificationResult } from '../../src/domain/VerificationResult'
 
@@ -91,6 +96,11 @@ interface StageBuckets {
   search: number[]
   answer: number[]
   verify: number[]
+  // TAX-6B-14 — 운영 경로와 동일하게 포트를 주입하면 켜지는 부가 비용 단계.
+  // embedding: 참고목록 의미 재정렬용 질의/후보 배치 임베딩(TAX-6B-12).
+  // precedent: pgvector 판례 코퍼스 라이브 검색(TAX-6B-14). 각 비용을 분리 관측한다.
+  embedding: number[]
+  precedent: number[]
 }
 
 function makeTimedQueryRewriter(
@@ -179,6 +189,49 @@ function makeTimedVerifier(
   }
 }
 
+/**
+ * 임베딩 포트 데코레이터 — embed/embedBatch 호출 시간을 embedding 버킷에 누적.
+ * 참고목록 의미 재정렬(TAX-6B-12)에서 [질의, 후보…]를 배치 1콜로 임베딩한다.
+ */
+function makeTimedEmbedding(inner: IEmbeddingPort, buckets: StageBuckets): IEmbeddingPort {
+  return {
+    async embed(text) {
+      const t0 = performance.now()
+      try {
+        return await inner.embed(text)
+      } finally {
+        buckets.embedding.push(performance.now() - t0)
+      }
+    },
+    async embedBatch(texts) {
+      const t0 = performance.now()
+      try {
+        return await inner.embedBatch(texts)
+      } finally {
+        buckets.embedding.push(performance.now() - t0)
+      }
+    },
+  }
+}
+
+/**
+ * 벡터 검색 포트 데코레이터 — searchSimilar 호출 시간을 precedent 버킷에 누적.
+ * 옵션 A(판례 경로만 추가)에서 검색 단계는 직접 매칭이므로, 이 데코레이터가 재는 값은
+ * 오롯이 판례 코퍼스 라이브 검색(TAX-6B-14)의 DB 1콜 비용이다.
+ */
+function makeTimedVectorSearch(inner: IVectorSearchPort, buckets: StageBuckets): IVectorSearchPort {
+  return {
+    async searchSimilar(queryVector, topK, sourceType) {
+      const t0 = performance.now()
+      try {
+        return await inner.searchSimilar(queryVector, topK, sourceType)
+      } finally {
+        buckets.precedent.push(performance.now() - t0)
+      }
+    },
+  }
+}
+
 // ─── 메인 측정 루프 ─────────────────────────────────────────────────────
 
 interface IterationLog {
@@ -202,6 +255,9 @@ async function main(): Promise<void> {
   console.log(`골든셋 케이스: ${cases.length}건`)
   console.log(`측정 횟수: n=${N_ITERATIONS}`)
   console.log(`합격선: 누적 P95 < ${P95_THRESHOLD_MS}ms`)
+  // TAX-6B-14 — 측정값이 어떤 조건인지 명확히. 판례 경로는 DATABASE_URL 유무로 갈린다.
+  console.log(`의미 재정렬(임베딩): 활성 (TAX-6B-12)`)
+  console.log(`판례 라이브 검색: ${config.databaseUrl ? '활성 (TAX-6B-14)' : '비활성 — DATABASE_URL 없음, 판례 경로 우회'}`)
   console.log('-'.repeat(60))
 
   // 실 어댑터 인스턴스화 (운영 경로 그대로 — §9-① 옵션 A)
@@ -210,13 +266,25 @@ async function main(): Promise<void> {
   const realAnswerGen = new OpenAIAnswerGeneratorAdapter()
   const realVerifier = new LawVerifierAdapter()
 
-  const buckets: StageBuckets = { rewrite: [], search: [], answer: [], verify: [] }
+  // TAX-6B-14 — 운영 진입점(app/api/answer/route.ts)과 동일한 부가 포트 주입.
+  //  embeddingPort: OPENAI_API_KEY만 있으면 항상 활성(의미 재정렬, TAX-6B-12).
+  //  vectorSearchPort: DATABASE_URL 있을 때만 활성(판례 라이브 검색, TAX-6B-14). 없으면 판례 경로는 우회.
+  const realEmbeddingPort = new OpenAIEmbeddingAdapter(config.openaiApiKey)
+  const realVectorSearchPort = config.databaseUrl
+    ? new PgVectorSearchAdapter(config.databaseUrl)
+    : undefined
+
+  const buckets: StageBuckets = { rewrite: [], search: [], answer: [], verify: [], embedding: [], precedent: [] }
   const verifyLog: VerifyLogEntry[] = []
   const ctx = { currentIter: 0, currentAttempt: 0 }
   const timedQueryRewriter = makeTimedQueryRewriter(realQueryRewriter, buckets)
   const timedSearchPort = makeTimedSearchPort(realSearchPort, buckets)
   const timedAnswerGen = makeTimedAnswerGen(realAnswerGen, buckets)
   const timedVerifier = makeTimedVerifier(realVerifier, buckets, verifyLog, ctx)
+  const timedEmbeddingPort = makeTimedEmbedding(realEmbeddingPort, buckets)
+  const timedVectorSearchPort = realVectorSearchPort
+    ? makeTimedVectorSearch(realVectorSearchPort, buckets)
+    : undefined
 
   const totals: number[] = []
   const logs: IterationLog[] = []
@@ -239,6 +307,9 @@ async function main(): Promise<void> {
         timedVerifier,
         c.question,
         temporal,
+        undefined,                // opsLog — 측정에선 운영 로그 적재 생략
+        timedEmbeddingPort,       // (8) 의미 재정렬용 임베딩 — TAX-6B-12
+        timedVectorSearchPort,    // (9) 판례 라이브 검색 — TAX-6B-14 (DB 없으면 undefined → 우회)
       )
       const elapsed = performance.now() - t0
       totals.push(elapsed)
@@ -271,6 +342,9 @@ async function main(): Promise<void> {
       search: buckets.search,
       answer: buckets.answer,
       verify: buckets.verify,
+      // 부가 단계 — 각 비용을 분리 관측(누적 P95 영향 진단·튜닝용)
+      embedding: buckets.embedding,
+      precedent: buckets.precedent,
     },
     totals,
     P95_THRESHOLD_MS,

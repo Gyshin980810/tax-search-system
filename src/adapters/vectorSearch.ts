@@ -57,19 +57,22 @@ export class PgVectorSearchAdapter implements IVectorSearchPort {
     this.pool = new Pool({ connectionString: databaseUrl, ssl: { rejectUnauthorized: false } })
   }
 
-  async searchSimilar(queryVector: number[], topK: number): Promise<VectorMatch[]> {
+  async searchSimilar(queryVector: number[], topK: number, sourceType?: SourceType): Promise<VectorMatch[]> {
     // pgvector 리터럴 형식: '[0.1,0.2,...]'
     const vectorLiteral = `[${queryVector.join(',')}]`
+    // sourceType 지정 시 해당 자료유형만 검색 (TAX-6B-14). 값은 파라미터 바인딩으로 주입(SQL 인젝션 방지).
+    const sourceFilter = sourceType ? 'AND source_type = $3' : ''
+    const params: (string | number)[] = sourceType ? [vectorLiteral, topK, sourceType] : [vectorLiteral, topK]
     const { rows } = await this.pool.query<DbRow>(
       `SELECT source_type, law_name, article_number, case_number, article_title,
               content, revision_date, enforcement_date, source_url,
               trust_tier, issuing_body, decision_date,
               1 - (embedding <=> $1::vector) AS similarity
        FROM taxlaw_embeddings
-       WHERE content != ''
+       WHERE content != '' ${sourceFilter}
        ORDER BY embedding <=> $1::vector
        LIMIT $2`,
-      [vectorLiteral, topK],
+      params,
     )
     return rows.map((row) => ({ item: rowToTaxLaw(row), similarity: row.similarity }))
   }

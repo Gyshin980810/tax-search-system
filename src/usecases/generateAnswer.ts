@@ -9,6 +9,7 @@ import type { ISearchPort } from '../ports/taxLawSearchPort'
 import type { IAnswerGeneratorPort } from '../ports/llmAnswerGeneratorPort'
 import type { ILawVerifierPort } from '../ports/lawVerifierPort'
 import type { IEmbeddingPort } from '../ports/embeddingPort'
+import type { IVectorSearchPort } from '../ports/vectorSearchPort'
 import type { IOpsLogPort, OpsQueryLogEntry } from '../ports/opsLogPort'
 import type { LabeledAnswer } from '../domain/LabeledAnswer'
 import type { TemporalContext } from '../domain/TemporalContext'
@@ -49,6 +50,19 @@ const MIN_RELEVANCE_SCORE = 1
  * 비법령 참고 후보는 보통 이 수 이내라 일반적으로는 전부 임베딩된다(안전장치).
  */
 const SEMANTIC_RERANK_LIMIT = 20
+
+/**
+ * 판례 코퍼스(pgvector) 라이브 배선 상수 (TAX-6B-14).
+ * pgvector에 적재된 대법원 판례(T4)를 질문 의미검색으로 참고 목록에 합류시킬 때의 보수적 게이트.
+ *  - PRECEDENT_TOP_K: 벡터DB에서 일단 끌어올 판례 후보 수.
+ *  - PRECEDENT_MIN_SIMILARITY: 이 cosine 유사도 미만은 무관으로 보고 제외(보수적 바닥).
+ *  - PRECEDENT_MAX: 게이트 통과분 중 최종 노출 상한(노이즈 위험을 소수로 가둠).
+ * PoC(TAX-6B-13) 실측 기준 초기값이며, 노이즈(0.42)·진짜이득(0.38) 역전 사례가 있어
+ * 바닥만으로 완전 분리는 불가 → 상한 소수 + ⚪T4 라벨로 위험을 제한한다.
+ */
+const PRECEDENT_TOP_K = 5
+const PRECEDENT_MIN_SIMILARITY = 0.5
+const PRECEDENT_MAX = 2
 
 /**
  * 참고자료(TaxLaw)의 관련도 점수 — 사건명·명칭(제목)과 본문(content)을 함께 평가한다 (TAX-015C → TAX-6B-10).
@@ -107,6 +121,7 @@ async function buildReferences(
   keyword: string,
   question: string,
   embeddingPort?: IEmbeddingPort,
+  vectorSearchPort?: IVectorSearchPort,
 ): Promise<TaxLaw[]> {
   const citedKeys = new Set(citations.map((c) => identityKey(c.taxLaw)))
   // citable 중 인용되지 않은 비법령(해석례·판례)
@@ -123,21 +138,56 @@ async function buildReferences(
   // [2] 의미(벡터) 유사도로 보강한다 (TAX-6B-12 방향 C).
   //  embeddingPort 미주입/실패 시 글자 점수만 사용(graceful degrade).
   //  ⚠️ 컷오프는 의미 점수 산정 *후* 적용한다 — 글자 0점이어도 의미가 가까운 자료(표기변이)를 살리기 위함.
-  const scored = await applySemanticScores(textScored, question, embeddingPort)
+  //  질문 벡터(queryVec)는 [4] 판례 라이브 검색과 공유한다 — 추가 임베딩 콜 0 (TAX-6B-14, P95 보호).
+  const { queryVec, scored } = await applySemanticScores(textScored, question, embeddingPort)
 
-  // [3] 컷오프 → 정렬 → 상한.
-  //  TAX-6B-10 엄격 컷오프: 관련도 MIN_RELEVANCE_SCORE 미만(무관) 자료는 제외.
-  //  검색된 자료가 전부 무관하면 빈 배열이 된다(회계사 결정 2026-06-17).
-  const filtered = scored
-    .filter((s) => s.score >= MIN_RELEVANCE_SCORE)
-    .sort((a, b) => {
-      if (a.score !== b.score) return b.score - a.score
-      const byDate = (b.ref.decisionDate ?? '').localeCompare(a.ref.decisionDate ?? '')
-      if (byDate !== 0) return byDate
-      return (a.ref.caseNumber ?? '').localeCompare(b.ref.caseNumber ?? '')
-    })
+  // [3] 외부 API 후보 컷오프 (TAX-6B-10 엄격 컷오프).
+  //  관련도 MIN_RELEVANCE_SCORE 미만(무관) 자료는 제외. 전부 무관하면 외부 후보는 비게 된다.
+  const externalFiltered = scored.filter((s) => s.score >= MIN_RELEVANCE_SCORE)
 
-  return filtered.slice(0, MAX_REFERENCES).map((s) => s.ref)
+  // [4] 판례 코퍼스(pgvector) 라이브 검색 (TAX-6B-14).
+  //  같은 질문 벡터로 판례만 의미검색 → 보수적 게이트(유사도 바닥 + 상위 N건) 통과분만.
+  //  이미 외부 후보·인용에 있는 사건번호는 제외해 중복 노출을 막는다.
+  const excludeKeys = new Set([...citedKeys, ...externalFiltered.map((s) => identityKey(s.ref))])
+  const precedentScored = await fetchPrecedentReferences(queryVec, vectorSearchPort, excludeKeys)
+
+  // [5] 병합 → 정렬 → 상한.
+  const merged = [...externalFiltered, ...precedentScored].sort((a, b) => {
+    if (a.score !== b.score) return b.score - a.score
+    const byDate = (b.ref.decisionDate ?? '').localeCompare(a.ref.decisionDate ?? '')
+    if (byDate !== 0) return byDate
+    return (a.ref.caseNumber ?? '').localeCompare(b.ref.caseNumber ?? '')
+  })
+
+  return merged.slice(0, MAX_REFERENCES).map((s) => s.ref)
+}
+
+/**
+ * 판례 코퍼스(pgvector)에서 질문과 의미가 가까운 판례를 가져온다 (TAX-6B-14 라이브 배선).
+ *
+ * - queryVec(질문 벡터)는 의미 재정렬에서 이미 만든 것을 재사용한다 — 추가 임베딩 콜 0.
+ * - 보수적 2단 게이트: 유사도 PRECEDENT_MIN_SIMILARITY 이상만 남기고 → 상위 PRECEDENT_MAX건.
+ * - 이미 노출 예정인 자료(excludeKeys)는 사건번호로 중복 제거.
+ * - vectorSearchPort/queryVec 미주입 또는 검색 실패 시 빈 배열(graceful degrade) — 기존 동작 회귀 없음.
+ * - 판례는 ⚪T4 참고자료로만 노출되며 발췌(excerpt) 인용으로 승격되지 않는다(§6.4 V검증 비대상).
+ *   점수는 외부 후보와 같은 척도로 정렬하기 위해 combinedScore(글자 0, 유사도)로 환산한다.
+ */
+async function fetchPrecedentReferences(
+  queryVec: number[] | undefined,
+  vectorSearchPort: IVectorSearchPort | undefined,
+  excludeKeys: Set<string>,
+): Promise<{ ref: TaxLaw; score: number }[]> {
+  if (!vectorSearchPort || !queryVec) return []
+  try {
+    const matches = await vectorSearchPort.searchSimilar(queryVec, PRECEDENT_TOP_K, '판례')
+    return matches
+      .filter((m) => m.similarity >= PRECEDENT_MIN_SIMILARITY && !excludeKeys.has(identityKey(m.item)))
+      .slice(0, PRECEDENT_MAX)
+      .map((m) => ({ ref: m.item, score: combinedScore(0, m.similarity) }))
+  } catch {
+    // 벡터 검색 실패 — 판례 경로만 조용히 건너뛴다. 외부 API 참고 목록은 그대로 구성된다.
+    return []
+  }
 }
 
 /** 의미 임베딩 입력 텍스트 — 사건명·명칭 + 본문(없으면 사건명만). 원문 읽기만(§6.1). */
@@ -151,15 +201,19 @@ function semanticText(ref: TaxLaw): string {
  * - embeddingPort 미주입(로컬·테스트·DB 미설정)이면 글자 점수를 그대로 사용한다.
  * - 임베딩 호출 실패 시에도 글자 점수로 자동 복귀한다(graceful degrade) — 참고 목록이 빈손이 되지 않게.
  * - P95 보호: 임베딩 대상은 SEMANTIC_RERANK_LIMIT건으로 제한하고, [질의, 후보…]를 배치 1콜로 임베딩한다.
+ * - 반환의 queryVec(질문 벡터)는 판례 라이브 검색(TAX-6B-14)이 재사용한다 — 임베딩 콜 1회로 공유.
+ *   후보가 없어도(textScored 빈 배열) embeddingPort가 있으면 질문만 임베딩해 queryVec을 만든다.
  */
 async function applySemanticScores(
   textScored: { ref: TaxLaw; textScore: number }[],
   question: string,
   embeddingPort?: IEmbeddingPort,
-): Promise<{ ref: TaxLaw; score: number }[]> {
-  // 의미검색 비활성: 글자 점수를 그대로 점수로 사용
-  if (!embeddingPort || textScored.length === 0) {
-    return textScored.map((s) => ({ ref: s.ref, score: s.textScore }))
+): Promise<{ queryVec: number[] | undefined; scored: { ref: TaxLaw; score: number }[] }> {
+  const textOnly = () => textScored.map((s) => ({ ref: s.ref, score: s.textScore }))
+
+  // 의미검색 비활성: 글자 점수를 그대로 사용 (queryVec 없음)
+  if (!embeddingPort) {
+    return { queryVec: undefined, scored: textOnly() }
   }
 
   // 후보가 상한을 넘으면 글자 점수 상위만 임베딩한다(드문 케이스 — P95 우선).
@@ -170,7 +224,7 @@ async function applySemanticScores(
   const targetSet = new Set(targets.map((t) => t.ref))
 
   try {
-    // [질의, 후보1, 후보2, …] 배치 임베딩 — 외부 API 왕복 1회
+    // [질의, 후보1, 후보2, …] 배치 임베딩 — 외부 API 왕복 1회 (후보 0건이면 질의만)
     const [queryVec, ...refVecs] = await embeddingPort.embedBatch([
       question,
       ...targets.map((t) => semanticText(t.ref)),
@@ -181,14 +235,15 @@ async function applySemanticScores(
       cosineByRef.set(t.ref, cosineSimilarity(queryVec, refVecs[i]))
     })
 
-    return textScored.map((s) => {
+    const scored = textScored.map((s) => {
       // 임베딩 대상이 아니면(상한 초과분) 의미 점수 없이 글자 점수만
       const cosine = targetSet.has(s.ref) ? (cosineByRef.get(s.ref) ?? 0) : 0
       return { ref: s.ref, score: combinedScore(s.textScore, cosine) }
     })
+    return { queryVec, scored }
   } catch {
     // 임베딩 실패 — 글자 점수로 복귀(부가 기능 저하 < 빈손). 핵심 파이프라인은 영향 없음.
-    return textScored.map((s) => ({ ref: s.ref, score: s.textScore }))
+    return { queryVec: undefined, scored: textOnly() }
   }
 }
 
@@ -307,6 +362,7 @@ export async function generateAnswer(
   temporal: TemporalContext,
   opsLog?: IOpsLogPort,
   embeddingPort?: IEmbeddingPort,
+  vectorSearchPort?: IVectorSearchPort,
 ): Promise<LabeledAnswer> {
   // [사전] PII 필터 — 감지 시 PiiDetectedError throw (운영 로그에 도달하지 않음)
   detectPii(question)
@@ -388,6 +444,7 @@ export async function generateAnswer(
       queries[0].keyword,
       question,
       embeddingPort,
+      vectorSearchPort,
     )
     // TAX-042D Stage 4 풀세트 보강 E·F·G — V3 라벨 적정성 진단 마커 부착.
     //   V3 PASS/FAIL 판정은 lawVerifier가 단독 수행하며, 본 호출은 운영 로그·후속 측정용
