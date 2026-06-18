@@ -1041,4 +1041,94 @@ describe('NationalTaxLawAdapter 통합 테스트 (MSW)', () => {
       expect(item!.issuingBody).toBe(issuingBody)
     })
   })
+
+  // ─── TAX-6B-11: 비법령 후보 확대 + 관련도 기반 본문 선별 ─────────────────────
+  describe('비법령 후보 확대·관련도 본문 선별 (TAX-6B-11)', () => {
+    /** 심판례 목록 8건: 사건명에 '양도소득세' 5건(관련) + '취득세' 3건(무관). API 기본 순서는 무관을 앞에 둠 */
+    function makeTribunalList() {
+      const relevant = Array.from({ length: 5 }, (_, i) => ({
+        id: i + 1,
+        특별행정심판재결례일련번호: `R${i + 1}`,
+        사건명: `양도소득세 과세처분의 당부 ${i + 1}`,
+        청구번호: `조심 2020서000${i + 1}`,
+        의결일자: `2020.0${i + 1}.01`,
+        재결청: '조세심판원',
+      }))
+      const irrelevant = Array.from({ length: 3 }, (_, i) => ({
+        id: 100 + i,
+        특별행정심판재결례일련번호: `X${i + 1}`,
+        사건명: `취득세 부과처분 취소 ${i + 1}`,
+        청구번호: `조심 2021서000${i + 1}`,
+        의결일자: `2021.0${i + 1}.01`,
+        재결청: '조세심판원',
+      }))
+      // 외부 API 기본 순서는 관련도와 무관하다고 가정 — 무관 항목을 앞에 배치해 정렬 효과를 검증
+      return { Decc: { resultCode: '00', totalCnt: '8', decc: [...irrelevant, ...relevant] } }
+    }
+
+    /** 본문 조회된 일련번호를 bodyFetchIds에 누적하는 핸들러(심판례만 동작, 나머지 트랙은 빈 결과) */
+    function makeHandlers(bodyFetchIds: string[]) {
+      return [
+        http.get(LAW_SEARCH_URL, ({ request }) => {
+          const target = new URL(request.url).searchParams.get('target')
+          if (target === 'ttSpecialDecc') return HttpResponse.json(makeTribunalList())
+          if (target === 'prec') return HttpResponse.json({ PrecSearch: {} })
+          if (target === 'expc') return HttpResponse.json({ Expc: {} })
+          if (target === 'ntsCgmExpc') return HttpResponse.json({ CgmExpc: {} })
+          return HttpResponse.json({ LawSearch: { resultCode: '00', totalCnt: '0' } })
+        }),
+        http.get(LAW_SERVICE_URL, ({ request }) => {
+          const url = new URL(request.url)
+          if (url.searchParams.get('target') === 'ttSpecialDecc') {
+            const id = url.searchParams.get('ID') ?? ''
+            bodyFetchIds.push(id)
+            return HttpResponse.json({
+              SpecialDeccService: {
+                주문: '심판청구를 기각한다.',
+                재결요지: '쟁점은 양도소득세 과세의 당부이다.',
+                이유: '처분은 정당하다.',
+                의결일자: '20200101',
+                특별행정심판재결례일련번호: id,
+              },
+            })
+          }
+          return HttpResponse.json({})
+        }),
+      ]
+    }
+
+    it('목록은 넓게 가져오되 본문은 관련도 상위 5건만 조회한다 (N+1 제어)', async () => {
+      const bodyFetchIds: string[] = []
+      server.use(...makeHandlers(bodyFetchIds))
+
+      const adapter = new NationalTaxLawAdapter()
+      // 고유 prefix로 어댑터 캐시 충돌 회피('양도소득세' 토큰은 관련도 매칭용으로 유지)
+      const result = await searchTaxLaw(adapter, 'tax6b11limit 양도소득세')
+
+      const tribunals = result.items.filter((i) => i.sourceType === '심판례')
+      // 목록 8건 전부 반환(유실 방지)
+      expect(tribunals).toHaveLength(8)
+      // 본문 조회는 상위 5건만 (P95 보호 — 기존 본문 조회 건수 유지)
+      expect(bodyFetchIds).toHaveLength(5)
+      // 본문 조회된 5건은 모두 관련(양도소득세) 항목(R*) — 무관(X*)은 본문 미조회
+      expect(bodyFetchIds.every((id) => id.startsWith('R'))).toBe(true)
+    })
+
+    it('관련 항목은 본문(content)을 갖고, 무관 항목은 content가 비어 참고 목록 후보가 된다', async () => {
+      const bodyFetchIds: string[] = []
+      server.use(...makeHandlers(bodyFetchIds))
+
+      const adapter = new NationalTaxLawAdapter()
+      const result = await searchTaxLaw(adapter, 'tax6b11body 양도소득세')
+
+      const tribunals = result.items.filter((i) => i.sourceType === '심판례')
+      const withBody = tribunals.filter((t) => t.content.trim() !== '')
+      const noBody = tribunals.filter((t) => t.content.trim() === '')
+      // 관련(양도소득세) 5건은 본문 보유, 무관(취득세) 3건은 본문 없음
+      expect(withBody).toHaveLength(5)
+      expect(noBody).toHaveLength(3)
+      expect(withBody.every((t) => t.articleTitle.includes('양도소득세'))).toBe(true)
+      expect(noBody.every((t) => t.articleTitle.includes('취득세'))).toBe(true)
+    })
+  })
 })

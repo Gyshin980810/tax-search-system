@@ -7,6 +7,7 @@ import type { ISearchPort } from '@/ports/taxLawSearchPort'
 import type { IAnswerGeneratorPort } from '@/ports/llmAnswerGeneratorPort'
 import type { ILawVerifierPort } from '@/ports/lawVerifierPort'
 import type { IOpsLogPort } from '@/ports/opsLogPort'
+import type { IEmbeddingPort } from '@/ports/embeddingPort'
 import type { SearchQuery } from '@/domain/SearchQuery'
 import type { SearchResult } from '@/domain/SearchResult'
 import type { LabeledAnswer } from '@/domain/LabeledAnswer'
@@ -177,11 +178,18 @@ describe('generateAnswer Usecase', () => {
     // 본문 없는 법령 — 비정상 데이터이므로 citable·references 어느 쪽에도 못 들어가고 드롭
     const LAW_NO_BODY: TaxLaw = { ...LAW_WITH_BODY, content: '', articleNumber: '제99조' }
 
-    /** 지정한 items를 반환하도록 searchPort만 교체한 스텁 묶음 */
+    /**
+     * 지정한 items를 반환하도록 searchPort를 교체한 스텁 묶음.
+     * TAX-6B-10 엄격 컷오프 도입 후, 참고 목록 노출을 보려면 검색어가 픽스처와 관련돼야 한다.
+     * 픽스처 사건명이 모두 "양도소득세 …"이므로 검색어도 '양도소득세'로 맞춘다.
+     */
     function makeStubsWithSearch(items: TaxLaw[]) {
       const stubs = makeStubs(PASS_RESULT)
       const searchResult: SearchResultType = { items, totalCount: items.length }
       vi.mocked(stubs.searchPort.search).mockResolvedValue(searchResult)
+      vi.mocked(stubs.queryRewriter.rewrite).mockResolvedValue([
+        { keyword: '양도소득세', requestedAt: new Date() },
+      ])
       return stubs
     }
 
@@ -229,7 +237,7 @@ describe('generateAnswer Usecase', () => {
       )
 
       expect(result.references).toHaveLength(10)
-      // 점수 동점(검색어 무매칭) → 선고일 최신순 상위 10건. 가장 오래된 01·02일자는 잘림
+      // 모두 '양도소득세' 사건명 매칭 → 점수 동점 → 선고일 최신순 상위 10건. 가장 오래된 01·02일자는 잘림
       expect(result.references?.[0].caseNumber).toBe('case-12')
       expect(result.references?.map((r) => r.caseNumber)).not.toContain('case-1')
       expect(result.references?.map((r) => r.caseNumber)).not.toContain('case-2')
@@ -288,18 +296,22 @@ describe('generateAnswer Usecase', () => {
       return stubs
     }
 
-    it('검색어가 사건명에 포함된 참고자료가 더 최신이 아니어도 위로 정렬된다', async () => {
-      // 무매칭(2026, 더 최신) vs 매칭(2020, 더 오래됨) → 매칭이 위로
-      const refNoMatch = makeRef('취득세 경정청구 거부처분 취소', '2026두1', '2026-01-01')
-      const refMatch = makeRef('양도소득세 부과처분 취소', '2020누1', '2020-01-01')
+    it('관련도 점수가 최신성보다 우선한다 (TAX-015C → TAX-6B-10 가중치 반영)', async () => {
+      // 약매칭: 사건명 무매칭 + 본문에 '양도소득세'(1점), 더 최신(2026)
+      const refWeak: TaxLaw = {
+        ...makeRef('취득세 경정청구 거부처분 취소', '2026두1', '2026-01-01'),
+        content: '주문\n재결요지 — 양도소득세 부과는 정당하다.',
+      }
+      // 강매칭: 사건명에 '양도소득세'(2점), 더 오래됨(2020)
+      const refStrong = makeRef('양도소득세 부과처분 취소', '2020누1', '2020-01-01')
       const { queryRewriter, searchPort, answerGenerator, verifier } =
-        makeStubsWith([LAW_WITH_BODY, refNoMatch, refMatch], '양도소득세')
+        makeStubsWith([LAW_WITH_BODY, refWeak, refStrong], '양도소득세')
 
       const result = await generateAnswer(
         queryRewriter, searchPort, answerGenerator, verifier, '양도소득세 비과세 질문', MOCK_TEMPORAL,
       )
 
-      // 관련도 점수(매칭 1 > 무매칭 0)가 최신성보다 우선
+      // 사건명 매칭(2점)이 본문 매칭(1점)·최신성보다 우선
       expect(result.references?.map((r) => r.caseNumber)).toEqual(['2020누1', '2026두1'])
     })
 
@@ -317,7 +329,7 @@ describe('generateAnswer Usecase', () => {
       expect(result.references?.map((r) => r.caseNumber)).toEqual(['new1', 'old1'])
     })
 
-    it('검색어가 어디에도 없으면(점수 0) 선고일순으로 수렴한다(안전 기본값)', async () => {
+    it('검색어가 어디에도 없으면(전부 점수 0) 참고 목록에서 제외된다 — 엄격 컷오프 (TAX-6B-10)', async () => {
       const refA = makeRef('취득세 부과처분', 'a1', '2020-01-01')
       const refB = makeRef('법인세 경정청구', 'b1', '2026-01-01')
       const { queryRewriter, searchPort, answerGenerator, verifier } =
@@ -327,8 +339,122 @@ describe('generateAnswer Usecase', () => {
         queryRewriter, searchPort, answerGenerator, verifier, '양도소득세 질문', MOCK_TEMPORAL,
       )
 
-      // 모두 점수 0 → 현행과 동일하게 선고일 최신순
-      expect(result.references?.map((r) => r.caseNumber)).toEqual(['b1', 'a1'])
+      // 모두 무관(점수 0) → 빈 배열("무관한 건 빼라", 회계사 결정 2026-06-17)
+      expect(result.references).toEqual([])
+    })
+
+    it('검색어가 본문(content)에만 있어도 참고 목록에 포함된다 — 본문 신호 (TAX-6B-10)', async () => {
+      // 사건명엔 검색어 없음, 본문에만 '가지급금' 포함 → 본문 매칭(1점)으로 노출
+      const refBodyOnly: TaxLaw = {
+        ...makeRef('법인세 부과처분 취소', 'body1', '2026-01-01'),
+        sourceType: '심판례',
+        trustTier: 'T3',
+        issuingBody: '조세심판원',
+        content: '주문\n재결요지 — 가지급금 인정이자 익금산입은 정당하다.',
+      }
+      const { queryRewriter, searchPort, answerGenerator, verifier } =
+        makeStubsWith([LAW_WITH_BODY, refBodyOnly], '가지급금')
+
+      const result = await generateAnswer(
+        queryRewriter, searchPort, answerGenerator, verifier, '가지급금 질문', MOCK_TEMPORAL,
+      )
+
+      expect(result.references?.map((r) => r.caseNumber)).toEqual(['body1'])
+    })
+
+    it('사건명 매칭(2점)이 본문 매칭(1점)보다 위로 정렬된다 — 가중치 (TAX-6B-10)', async () => {
+      // titleHit: 사건명에 '가지급금'(2점) / bodyHit: 본문에만 '가지급금'(1점)
+      const titleHit: TaxLaw = {
+        ...makeRef('가지급금 인정이자 부과처분', 'title1', '2020-01-01'),
+        sourceType: '심판례', trustTier: 'T3', issuingBody: '조세심판원',
+        content: '주문\n재결요지 — 청구를 기각한다.',
+      }
+      const bodyHit: TaxLaw = {
+        ...makeRef('법인세 부과처분 취소', 'body1', '2026-01-01'),
+        sourceType: '심판례', trustTier: 'T3', issuingBody: '조세심판원',
+        content: '주문\n재결요지 — 가지급금 인정이자는 정당하다.',
+      }
+      const { queryRewriter, searchPort, answerGenerator, verifier } =
+        makeStubsWith([LAW_WITH_BODY, bodyHit, titleHit], '가지급금')
+
+      const result = await generateAnswer(
+        queryRewriter, searchPort, answerGenerator, verifier, '가지급금 질문', MOCK_TEMPORAL,
+      )
+
+      // 사건명 매칭(2점)이 더 오래됐어도, 본문 매칭(1점)보다 위
+      expect(result.references?.map((r) => r.caseNumber)).toEqual(['title1', 'body1'])
+    })
+
+    it('불용어("관련")만으로는 점수가 오르지 않는다 — 불용어 제거 (TAX-6B-10)', async () => {
+      // 검색어 토큰 중 '관련'은 불용어 → 제거. 사건명에 '관련'만 있고 핵심어는 없으면 컷오프
+      const onlyStopword = makeRef('관련 사건', 'stop1', '2026-01-01')
+      const { queryRewriter, searchPort, answerGenerator, verifier } =
+        makeStubsWith([LAW_WITH_BODY, onlyStopword], '양도소득세 관련')
+
+      const result = await generateAnswer(
+        queryRewriter, searchPort, answerGenerator, verifier, '양도소득세 관련 질문', MOCK_TEMPORAL,
+      )
+
+      // '관련'은 불용어로 제거되고 '양도소득세'는 미포함 → 점수 0 → 빈 배열
+      expect(result.references).toEqual([])
+    })
+
+    // ─── TAX-6B-12 방향 C: 의미(벡터) 재정렬 ──────────────────────────────
+    /** 의미 임베딩 스텁 — '양도'가 들어간 텍스트는 [1,0], 아니면 [0,1] (표기변이 의미매칭 모사) */
+    function makeEmbedStub(): IEmbeddingPort {
+      const vecFor = (t: string): number[] => (t.includes('양도') ? [1, 0] : [0, 1])
+      return {
+        embed: vi.fn(async (t: string) => vecFor(t)),
+        embedBatch: vi.fn(async (texts: string[]) => texts.map(vecFor)),
+      }
+    }
+
+    it('글자는 안 겹쳐도 의미가 가까우면 참고 목록에 살린다 — 표기변이 구제 (TAX-6B-12)', async () => {
+      // 사건명 "양도세"는 검색어 "양도소득세"와 글자가 안 겹쳐 글자 0점이지만, 의미로는 가깝다
+      const variant = makeRef('양도세 비과세 해당 여부', 'var1', '2026-01-01')
+      const unrelated = makeRef('취득세 부과처분 취소', 'unrel1', '2026-01-01')
+      const { queryRewriter, searchPort, answerGenerator, verifier } =
+        makeStubsWith([LAW_WITH_BODY, variant, unrelated], '양도소득세')
+
+      const result = await generateAnswer(
+        queryRewriter, searchPort, answerGenerator, verifier,
+        '양도소득세 1세대 1주택', MOCK_TEMPORAL, undefined, makeEmbedStub(),
+      )
+
+      // 의미가 가까운 '양도세' 후보만 구제, 무관한 '취득세'는 의미도 0 → 탈락
+      expect(result.references?.map((r) => r.caseNumber)).toEqual(['var1'])
+    })
+
+    it('embeddingPort 미주입이면 글자 점수만 사용한다 — 폴백 (TAX-6B-12)', async () => {
+      // 위와 동일 후보지만 임베딩 없음 → 글자 0점 '양도세'는 컷오프 탈락
+      const variant = makeRef('양도세 비과세 해당 여부', 'var1', '2026-01-01')
+      const { queryRewriter, searchPort, answerGenerator, verifier } =
+        makeStubsWith([LAW_WITH_BODY, variant], '양도소득세')
+
+      const result = await generateAnswer(
+        queryRewriter, searchPort, answerGenerator, verifier, '양도소득세 1세대 1주택', MOCK_TEMPORAL,
+      )
+
+      expect(result.references).toEqual([])
+    })
+
+    it('임베딩 호출 실패 시 글자 점수로 복귀한다 — graceful degrade (TAX-6B-12)', async () => {
+      const variant = makeRef('양도세 비과세 해당 여부', 'var1', '2026-01-01')   // 글자 0
+      const strong = makeRef('양도소득세 부과처분 취소', 'strong1', '2020-01-01') // 글자 2
+      const failingEmbed: IEmbeddingPort = {
+        embed: vi.fn(async () => { throw new Error('embedding API down') }),
+        embedBatch: vi.fn(async () => { throw new Error('embedding API down') }),
+      }
+      const { queryRewriter, searchPort, answerGenerator, verifier } =
+        makeStubsWith([LAW_WITH_BODY, variant, strong], '양도소득세')
+
+      const result = await generateAnswer(
+        queryRewriter, searchPort, answerGenerator, verifier,
+        '양도소득세 1세대 1주택', MOCK_TEMPORAL, undefined, failingEmbed,
+      )
+
+      // 임베딩 실패 → 글자 점수만: 글자 매칭되는 'strong1'만, 글자 0 'var1'은 탈락
+      expect(result.references?.map((r) => r.caseNumber)).toEqual(['strong1'])
     })
   })
 
@@ -364,6 +490,10 @@ describe('generateAnswer Usecase', () => {
       const stubs = makeStubs(PASS_RESULT)
       const searchResult: SearchResultType = { items, totalCount: items.length }
       vi.mocked(stubs.searchPort.search).mockResolvedValue(searchResult)
+      // TAX-6B-10 컷오프: EXPC 사건명("양도소득세 …")과 매칭되도록 검색어 지정
+      vi.mocked(stubs.queryRewriter.rewrite).mockResolvedValue([
+        { keyword: '양도소득세', requestedAt: new Date() },
+      ])
       return stubs
     }
 

@@ -7,6 +7,7 @@ import type { TaxLaw, TrustTier } from '../domain/TaxLaw'
 import { ApiTimeoutError, ApiUnavailableError } from '../domain/errors'
 import { normalizeLawName, selectBestLaw } from '../domain/lawAliases'
 import { normalizeNonLawQuery } from '../domain/nonLawQueryNormalize'
+import { extractTerms, scoreRelevance } from '../domain/nonLawRelevance'
 
 // ─── 국세법령정보시스템 API 응답 타입 ──────────────────────────────────────
 
@@ -452,6 +453,42 @@ function sortByDecisionDate(items: TaxLaw[]): TaxLaw[] {
   })
 }
 
+// ─── TAX-6B-11: 비법령 후보 확대 + 관련도 기반 본문 선별 ──────────────────────
+//
+// 회계사 피드백("심판례 관련성 너무 낮음") 후속. 두 결함을 해소한다:
+//   ① 유실 — display=5로 좁아 관련 자료가 6위면 아예 못 가져옴.
+//   ② P95 — 심판례·해석례는 후보 전수 본문 조회(N+1)라 후보를 함부로 못 늘림.
+//
+// 해법: 목록은 넓게(NONLAW_LIST_DISPLAY) 가져오되, 사건명 관련도 상위 K건(NONLAW_BODY_FETCH_LIMIT)만
+//       본문 조회한다. 본문 조회 건수는 기존(5)과 동일 → P95 영향 최소. 나머지는 content=''(참고 목록 후보).
+// 결정론성(SSOT §7.7): 외부 API 순서를 신뢰하지 않고, 우리 관련도 점수 + 보조키(날짜↓·식별자↑)로 정렬한다.
+
+/** 비법령 목록 조회 폭 — 관련 자료 유실 방지 (회계사 결정 2026-06-17) */
+const NONLAW_LIST_DISPLAY = '12'
+/** 본문 조회 상한 — 관련도 상위 N건만 본문 조회(P95 현 수준 유지, 회계사 결정 2026-06-17) */
+const NONLAW_BODY_FETCH_LIMIT = 5
+
+/**
+ * 목록을 사건명 관련도 내림차순으로 정렬한다 (결정론적 보조키 포함).
+ * 본문은 아직 미조회이므로 제목(사건명·명칭)만으로 점수화한다(scoreRelevance body='').
+ * 동점 시 날짜↓ → 식별자↑로 수렴해 같은 질문에 같은 순서를 보장한다 (SSOT §7.7).
+ */
+function rankByRelevance<T>(
+  list: T[],
+  terms: string[],
+  getTitle: (x: T) => string,
+  getDate: (x: T) => string,
+  getId: (x: T) => string,
+): T[] {
+  return [...list].sort((a, b) => {
+    const byScore = scoreRelevance(getTitle(b), '', terms) - scoreRelevance(getTitle(a), '', terms)
+    if (byScore !== 0) return byScore
+    const byDate = getDate(b).localeCompare(getDate(a))
+    if (byDate !== 0) return byDate
+    return getId(a).localeCompare(getId(b))
+  })
+}
+
 /** fetch 래퍼 — 5초 타임아웃, 에러 변환 */
 async function fetchWithTimeout(url: string): Promise<Response> {
   const controller = new AbortController()
@@ -554,11 +591,13 @@ export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
 
       // Trust Tier 순 병합: 법령(T1·T2) → 해석례(T3) → 심판례(T3) → 판례(T4) — 직접 근거 우선 (CLAUDE.md §6.2)
       //  법제처 해석례(본문 있음·발췌 인용 가능)를 국세청 해석(본문 없음·참고 목록)보다 앞에 둔다.
+      //  TAX-6B-11: 해석례(expc)·심판례는 어댑터가 이미 관련도순으로 정렬해 반환하므로 여기서 재정렬하지 않는다
+      //   (날짜순으로 덮으면 관련도 순서가 사라짐). 관련도 정렬이 없는 NTS해석·판례만 sortByDecisionDate 유지.
       items = [
         ...lawResult.items,
-        ...sortByDecisionDate(interpItems),
+        ...interpItems,
         ...sortByDecisionDate(ntsItems),
-        ...sortByDecisionDate(tribunalItems),
+        ...tribunalItems,
         ...sortByDecisionDate(precItems),
       ]
     }
@@ -797,7 +836,8 @@ export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
       target: 'expc',
       type: 'JSON',
       query: n.keyword,
-      display: '5',
+      // TAX-6B-11: 심판례와 동일 — 목록은 넓게, 본문은 관련도 상위 K건만.
+      display: NONLAW_LIST_DISPLAY,
       page: '1',
     })
     const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawSearch.do?${params}`)
@@ -807,10 +847,20 @@ export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
 
     const list = Array.isArray(ex.expc) ? ex.expc : [ex.expc]
 
-    // 각 항목 본문 병렬 조회
+    // TAX-6B-11: 안건명 관련도로 정렬 → 상위 K건만 본문 조회, 나머지는 content=''(참고 목록 후보).
+    const terms = extractTerms(n.keyword)
+    const ranked = rankByRelevance(
+      list,
+      terms,
+      (e) => String(e.안건명 ?? ''),
+      (e) => String(e.회신일자 ?? ''),
+      (e) => String(e.안건번호 ?? ''),
+    )
     const all = await Promise.all(
-      list.map(async (e) => {
-        const content = await this.fetchInterpretationBody(e.법령해석례일련번호)
+      ranked.map(async (e, i) => {
+        const content = i < NONLAW_BODY_FETCH_LIMIT
+          ? await this.fetchInterpretationBody(e.법령해석례일련번호)
+          : ''
         return this.toInterpretationTaxLaw(e, content)
       }),
     )
@@ -925,7 +975,8 @@ export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
       target: 'ttSpecialDecc',
       type: 'JSON',
       query: effectiveKeyword,
-      display: '5',
+      // TAX-6B-11: 목록은 넓게 가져와 관련 자료 유실을 막는다(본문 조회는 상위 K건으로 제한).
+      display: NONLAW_LIST_DISPLAY,
       page: '1',
     })
     const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawSearch.do?${params}`)
@@ -935,10 +986,22 @@ export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
     if (!dc?.decc) return []
 
     const list = Array.isArray(dc.decc) ? dc.decc : [dc.decc]
-    // 각 항목 본문 병렬 조회
+
+    // TAX-6B-11: 사건명 관련도로 정렬한 뒤 상위 K건만 본문 조회(N+1 제어), 나머지는 content=''.
+    //  본문 없는 항목은 상위 generateAnswer가 참고 목록 후보로 처리한다(관련도 컷오프는 거기서 — TAX-6B-10).
+    const terms = extractTerms(n.keyword)
+    const ranked = rankByRelevance(
+      list,
+      terms,
+      (d) => String(d.사건명 ?? ''),
+      (d) => String(d.의결일자 ?? ''),
+      (d) => String(d.청구번호 ?? ''),
+    )
     const all = await Promise.all(
-      list.map(async (d) => {
-        const content = await this.fetchTribunalBody(d.특별행정심판재결례일련번호)
+      ranked.map(async (d, i) => {
+        const content = i < NONLAW_BODY_FETCH_LIMIT
+          ? await this.fetchTribunalBody(d.특별행정심판재결례일련번호)
+          : ''
         return this.toTribunalTaxLaw(d, content)
       }),
     )
