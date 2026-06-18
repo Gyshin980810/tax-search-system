@@ -3,10 +3,12 @@ import { detectPii, maskPhoneEmail } from '../utils/piiFilter'
 import { AppError } from '../domain/errors'
 import { DISCLAIMER } from '../domain/disclaimer'
 import { computeVerifyDiagnostics } from '../adapters/verifyDiagnostics'
+import { extractTerms, scoreRelevance, cosineSimilarity, combinedScore } from '../domain/nonLawRelevance'
 import type { IQueryRewriterPort } from '../ports/llmQueryRewriterPort'
 import type { ISearchPort } from '../ports/taxLawSearchPort'
 import type { IAnswerGeneratorPort } from '../ports/llmAnswerGeneratorPort'
 import type { ILawVerifierPort } from '../ports/lawVerifierPort'
+import type { IEmbeddingPort } from '../ports/embeddingPort'
 import type { IOpsLogPort, OpsQueryLogEntry } from '../ports/opsLogPort'
 import type { LabeledAnswer } from '../domain/LabeledAnswer'
 import type { TemporalContext } from '../domain/TemporalContext'
@@ -35,18 +37,26 @@ function callGenerate(
 const MAX_REFERENCES = 10
 
 /**
- * 검색어 토큰이 참고자료의 사건명·명칭에 몇 개나 포함되는지로 관련도 점수를 산출한다 (TAX-015C).
- *
- * 참고자료는 사건명(articleTitle)·명칭(lawName)이 주 텍스트 신호다.
- * 부분 문자열 포함(includes) 기준의 가벼운 휴리스틱이며, 의미 기반 유사도(벡터DB)는 별도 트랙이다.
+ * 참고 목록 노출 최소 관련도 (TAX-6B-10, 회계사 결정 2026-06-17 — 엄격 컷오프).
+ * 점수가 이 값 미만(=검색어가 사건명·본문 어디에도 없음)인 자료는 참고 목록에서 제외한다.
+ * 검색된 비법령 자료가 전부 무관하면 참고 목록은 빈 배열이 된다("무관한 건 빼라").
+ */
+const MIN_RELEVANCE_SCORE = 1
+
+/**
+ * 의미(벡터) 재정렬 시 임베딩 대상 상한 (TAX-6B-12).
+ * 후보가 이보다 많으면 글자 점수 상위 N건만 임베딩해 P95·비용을 보호한다.
+ * 비법령 참고 후보는 보통 이 수 이내라 일반적으로는 전부 임베딩된다(안전장치).
+ */
+const SEMANTIC_RERANK_LIMIT = 20
+
+/**
+ * 참고자료(TaxLaw)의 관련도 점수 — 사건명·명칭(제목)과 본문(content)을 함께 평가한다 (TAX-015C → TAX-6B-10).
+ * 점수 산정 본체는 domain/nonLawRelevance(scoreRelevance)에 있고, 여기선 TaxLaw 필드를 매핑만 한다.
+ * (어댑터의 본문 조회 선별과 동일 기준을 쓰기 위해 domain으로 추출 — TAX-6B-11)
  */
 function relevanceScore(ref: TaxLaw, terms: string[]): number {
-  const haystack = `${ref.articleTitle} ${ref.lawName}`
-  let score = 0
-  for (const term of terms) {
-    if (haystack.includes(term)) score += 1
-  }
-  return score
+  return scoreRelevance(`${ref.articleTitle} ${ref.lawName}`, ref.content, terms)
 }
 
 /** 자료 식별 키 — 인용 여부 비교용 (법령=조문번호, 비법령=사건/안건번호) */
@@ -87,30 +97,99 @@ function splitResults(items: TaxLaw[]): { citable: TaxLaw[]; contentlessRefs: Ta
  * - 참고 목록은 발췌(excerpt)를 만들지 않으므로 law-verifier V검증 대상이 아니다(citation 승격 금지 — TAX-015B).
  * - 인용된 자료는 식별자로 제외해 중복 노출을 막는다.
  * - 인용 안 된 자료는 LLM이 본 답변에서 제외한 것이라 ⚪참고자료 성격에 부합한다.
- *   정렬: 관련도 점수↓ → 선고일↓ → 사건번호↑ (결정론성 보장). 점수 전부 0이면 선고일순 수렴.
+ *   정렬: 관련도 점수↓ → 선고일↓ → 사건번호↑ (결정론성 보장).
+ * - TAX-6B-10: 관련도 MIN_RELEVANCE_SCORE 미만(무관) 자료는 컷오프. 전부 무관하면 빈 배열.
  */
-function buildReferences(
+async function buildReferences(
   citable: TaxLaw[],
   contentlessRefs: TaxLaw[],
   citations: Citation[],
   keyword: string,
-): TaxLaw[] {
+  question: string,
+  embeddingPort?: IEmbeddingPort,
+): Promise<TaxLaw[]> {
   const citedKeys = new Set(citations.map((c) => identityKey(c.taxLaw)))
   // citable 중 인용되지 않은 비법령(해석례·판례)
   const uncitedNonLaw = citable.filter(
     (t) => t.sourceType !== '법령' && !citedKeys.has(identityKey(t)),
   )
 
-  const terms = keyword.split(/\s+/).filter((t) => t.length >= 2)
-  const all = [...contentlessRefs, ...uncitedNonLaw].sort((a, b) => {
-    const byScore = relevanceScore(b, terms) - relevanceScore(a, terms)
-    if (byScore !== 0) return byScore
-    const byDate = (b.decisionDate ?? '').localeCompare(a.decisionDate ?? '')
-    if (byDate !== 0) return byDate
-    return (a.caseNumber ?? '').localeCompare(b.caseNumber ?? '')
-  })
+  const terms = extractTerms(keyword)
+  const candidates = [...contentlessRefs, ...uncitedNonLaw]
 
-  return all.slice(0, MAX_REFERENCES)
+  // [1] 글자(부분문자열) 점수를 1회 계산한다.
+  const textScored = candidates.map((ref) => ({ ref, textScore: relevanceScore(ref, terms) }))
+
+  // [2] 의미(벡터) 유사도로 보강한다 (TAX-6B-12 방향 C).
+  //  embeddingPort 미주입/실패 시 글자 점수만 사용(graceful degrade).
+  //  ⚠️ 컷오프는 의미 점수 산정 *후* 적용한다 — 글자 0점이어도 의미가 가까운 자료(표기변이)를 살리기 위함.
+  const scored = await applySemanticScores(textScored, question, embeddingPort)
+
+  // [3] 컷오프 → 정렬 → 상한.
+  //  TAX-6B-10 엄격 컷오프: 관련도 MIN_RELEVANCE_SCORE 미만(무관) 자료는 제외.
+  //  검색된 자료가 전부 무관하면 빈 배열이 된다(회계사 결정 2026-06-17).
+  const filtered = scored
+    .filter((s) => s.score >= MIN_RELEVANCE_SCORE)
+    .sort((a, b) => {
+      if (a.score !== b.score) return b.score - a.score
+      const byDate = (b.ref.decisionDate ?? '').localeCompare(a.ref.decisionDate ?? '')
+      if (byDate !== 0) return byDate
+      return (a.ref.caseNumber ?? '').localeCompare(b.ref.caseNumber ?? '')
+    })
+
+  return filtered.slice(0, MAX_REFERENCES).map((s) => s.ref)
+}
+
+/** 의미 임베딩 입력 텍스트 — 사건명·명칭 + 본문(없으면 사건명만). 원문 읽기만(§6.1). */
+function semanticText(ref: TaxLaw): string {
+  return `${ref.articleTitle} ${ref.lawName} ${ref.content}`.trim()
+}
+
+/**
+ * 글자 점수 후보에 의미(벡터) 유사도를 가중합한다 (TAX-6B-12 방향 C).
+ *
+ * - embeddingPort 미주입(로컬·테스트·DB 미설정)이면 글자 점수를 그대로 사용한다.
+ * - 임베딩 호출 실패 시에도 글자 점수로 자동 복귀한다(graceful degrade) — 참고 목록이 빈손이 되지 않게.
+ * - P95 보호: 임베딩 대상은 SEMANTIC_RERANK_LIMIT건으로 제한하고, [질의, 후보…]를 배치 1콜로 임베딩한다.
+ */
+async function applySemanticScores(
+  textScored: { ref: TaxLaw; textScore: number }[],
+  question: string,
+  embeddingPort?: IEmbeddingPort,
+): Promise<{ ref: TaxLaw; score: number }[]> {
+  // 의미검색 비활성: 글자 점수를 그대로 점수로 사용
+  if (!embeddingPort || textScored.length === 0) {
+    return textScored.map((s) => ({ ref: s.ref, score: s.textScore }))
+  }
+
+  // 후보가 상한을 넘으면 글자 점수 상위만 임베딩한다(드문 케이스 — P95 우선).
+  const targets =
+    textScored.length <= SEMANTIC_RERANK_LIMIT
+      ? textScored
+      : [...textScored].sort((a, b) => b.textScore - a.textScore).slice(0, SEMANTIC_RERANK_LIMIT)
+  const targetSet = new Set(targets.map((t) => t.ref))
+
+  try {
+    // [질의, 후보1, 후보2, …] 배치 임베딩 — 외부 API 왕복 1회
+    const [queryVec, ...refVecs] = await embeddingPort.embedBatch([
+      question,
+      ...targets.map((t) => semanticText(t.ref)),
+    ])
+
+    const cosineByRef = new Map<TaxLaw, number>()
+    targets.forEach((t, i) => {
+      cosineByRef.set(t.ref, cosineSimilarity(queryVec, refVecs[i]))
+    })
+
+    return textScored.map((s) => {
+      // 임베딩 대상이 아니면(상한 초과분) 의미 점수 없이 글자 점수만
+      const cosine = targetSet.has(s.ref) ? (cosineByRef.get(s.ref) ?? 0) : 0
+      return { ref: s.ref, score: combinedScore(s.textScore, cosine) }
+    })
+  } catch {
+    // 임베딩 실패 — 글자 점수로 복귀(부가 기능 저하 < 빈손). 핵심 파이프라인은 영향 없음.
+    return textScored.map((s) => ({ ref: s.ref, score: s.textScore }))
+  }
 }
 
 // ─── TwoStageSpec 제네릭 2단계 실행기 ────────────────────────────────────────
@@ -227,6 +306,7 @@ export async function generateAnswer(
   question: string,
   temporal: TemporalContext,
   opsLog?: IOpsLogPort,
+  embeddingPort?: IEmbeddingPort,
 ): Promise<LabeledAnswer> {
   // [사전] PII 필터 — 감지 시 PiiDetectedError throw (운영 로그에 도달하지 않음)
   detectPii(question)
@@ -301,11 +381,13 @@ export async function generateAnswer(
     )
 
     // 최종 참고 목록 구성 (TAX-015D): 본문 없는 자료 + 인용 안 된 해석례·판례, 관련도순 상위 N건
-    const references = buildReferences(
+    const references = await buildReferences(
       finalState.citable,
       finalState.contentlessRefs,
       finalState.answer.citations,
       queries[0].keyword,
+      question,
+      embeddingPort,
     )
     // TAX-042D Stage 4 풀세트 보강 E·F·G — V3 라벨 적정성 진단 마커 부착.
     //   V3 PASS/FAIL 판정은 lawVerifier가 단독 수행하며, 본 호출은 운영 로그·후속 측정용
