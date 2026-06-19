@@ -30,6 +30,7 @@
     "embed": "node --env-file=.env.local --conditions=react-server --import tsx scripts/embed.ts",
     "smoke:vector": "node --env-file=.env.local --conditions=react-server --import tsx scripts/smokeVector.ts",
     "convert:precedent": "tsx scripts/convertPrecedentMd.ts",
+    "collect:tribunal": "node --env-file=.env.local --conditions=react-server --import tsx scripts/collectTribunal.ts",
     "probe:precedent": "node --env-file=.env.local --conditions=react-server --import tsx scripts/precedentRelevanceProbe.ts"
   },
   "dependencies": {
@@ -37,7 +38,6 @@
     "@ai-sdk/voyage": "^1.0.7",
     "@types/pg": "^8.20.0",
     "ai": "^6.0.182",
-    "mermaid": "^11.15.0",
     "next": "16.2.6",
     "pg": "^8.21.0",
     "react": "19.2.4",

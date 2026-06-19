@@ -4,7 +4,6 @@ import type { LabeledAnswer } from '@/domain/LabeledAnswer'
 import type { CitationLabel } from '@/domain/Citation'
 import type { TaxLaw } from '@/domain/TaxLaw'
 import { CitationCopy } from './CitationCopy'
-import { ImpactMapPanel } from './ImpactMapPanel'
 import { isBookmarked, addBookmark, removeBookmark } from '@/utils/bookmarkStore'
 
 // 부칙·경과조치 citation 판별 (TAX-6B-2, FR-17)
@@ -255,10 +254,6 @@ export function AnswerCard({ answer }: AnswerCardProps) {
             <CitationCopy citation={citation} />
           </div>
 
-          {/* TAX-034: 심판례 관계 그래프 버튼 — caseNumber 있을 때만 노출 */}
-          {citation.taxLaw.sourceType === '심판례' && citation.taxLaw.caseNumber && (
-            <ImpactMapPanel caseNumber={citation.taxLaw.caseNumber} />
-          )}
         </div>
         )
       })}

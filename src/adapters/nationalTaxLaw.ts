@@ -1,6 +1,5 @@
 import { config } from '../config'
 import type { ISearchPort } from '../ports/taxLawSearchPort'
-import type { IImpactMapPort, TribunalRelationsRaw } from '../ports/impactMapPort'
 import type { SearchQuery } from '../domain/SearchQuery'
 import type { SearchResult } from '../domain/SearchResult'
 import type { TaxLaw, TrustTier } from '../domain/TaxLaw'
@@ -555,7 +554,7 @@ function buildNonLawTaxLaw(base: NonLawBase): TaxLaw {
  * 조세심판원 결정례는 본문이 있어 발췌 인용(citable)·V검증 대상이다(TAX-016C).
  * Phase 4(벡터 DB) 이후 의미 유사도 검색으로 확장 예정.
  */
-export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
+export class NationalTaxLawAdapter implements ISearchPort {
   private readonly apiKey = config.nationalTaxApiKey
 
   async search(query: SearchQuery): Promise<SearchResult> {
@@ -1025,85 +1024,6 @@ export class NationalTaxLawAdapter implements ISearchPort, IImpactMapPort {
       return [s.주문, s.재결요지, s.이유].filter(Boolean).join('\n').trim()
     } catch {
       return ''
-    }
-  }
-
-  /**
-   * 청구번호로 심판례 관계 원문 데이터를 조회한다 (TAX-033, IImpactMapPort 구현).
-   *
-   * 흐름:
-   *   1. 청구번호를 query로 목록 검색 → 일련번호·목록 청구번호 확보
-   *      ⚠️ 청구번호 공백 유무 혼재(진단5): 정규화 비교(공백 제거·소문자) 후 최선 일치 항목 선택
-   *   2. 일련번호로 본문 조회 → 관련법령·참조결정·세목 추출
-   *
-   * @param caseNumber 조회할 청구번호 (예: "조심2011서1540", "조심 2020부1558")
-   * @returns TribunalRelationsRaw 또는 null (해당 심판례를 찾지 못한 경우)
-   */
-  async fetchTribunalRelations(caseNumber: string): Promise<TribunalRelationsRaw | null> {
-    const normalizedQuery = (caseNumber ?? '').trim()
-    if (!normalizedQuery) return null
-
-    // 1단계: 목록 검색 — 청구번호를 query로 넣어 해당 심판례 찾기
-    let listItem: RawTtSpecialDecc | null = null
-    try {
-      const params = new URLSearchParams({
-        OC: this.apiKey,
-        target: 'ttSpecialDecc',
-        type: 'JSON',
-        query: normalizedQuery,
-        display: '10',   // 공백 유무 변이로 인해 여러 후보를 봐야 할 수 있음
-        page: '1',
-      })
-      const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawSearch.do?${params}`)
-      const data = await res.json() as { Decc?: RawTtSpecialDeccSearch }
-      const dc = data.Decc
-      if (dc?.decc) {
-        const list = Array.isArray(dc.decc) ? dc.decc : [dc.decc]
-        // 청구번호 공백 정규화 비교로 최선 일치 항목 선택 (진단5: 공백 혼재 확인)
-        const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase()
-        const target = normalize(normalizedQuery)
-        listItem =
-          list.find((d) => normalize(String(d.청구번호 ?? '')) === target) ??
-          list[0] ??    // 완전일치 없으면 첫 번째 폴백
-          null
-      }
-    } catch {
-      return null
-    }
-
-    if (!listItem) return null
-
-    // 2단계: 본문 조회 — 일련번호로 관련법령·참조결정·세목 추출
-    const serialNo = String(listItem.특별행정심판재결례일련번호 ?? '').trim()
-    const listCaseNo = String(listItem.청구번호 ?? '').trim()
-
-    let bodyData: RawSpecialDeccService | null = null
-    if (serialNo) {
-      try {
-        const params = new URLSearchParams({
-          OC: this.apiKey,
-          target: 'ttSpecialDecc',
-          ID: serialNo,
-          type: 'JSON',
-        })
-        const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawService.do?${params}`)
-        const data = await res.json() as { SpecialDeccService?: RawSpecialDeccService }
-        bodyData = data.SpecialDeccService ?? null
-      } catch {
-        // 본문 조회 실패 시 목록 데이터만으로 계속 진행
-      }
-    }
-
-    return {
-      caseNumber: listCaseNo || normalizedQuery,   // 목록값 우선, 없으면 입력값
-      serialNo,
-      caseName: String(listItem.사건명 ?? '').trim(),
-      taxType: String(bodyData?.세목 ?? '').trim(),
-      decisionDate: toIsoDateLoose(String(listItem.의결일자 ?? '')),
-      agency: String(listItem.재결청 ?? '조세심판원').trim(),
-      relatedLawsRaw: String(bodyData?.관련법령 ?? '').trim(),
-      referencesRaw: String(bodyData?.참조결정 ?? '').trim(),
-      sourceUrl: toTribunalSourceUrl(listCaseNo || normalizedQuery),
     }
   }
 
