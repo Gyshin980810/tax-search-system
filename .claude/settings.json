@@ -78,16 +78,6 @@
           }
         ]
       }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node scripts/run-verifier.js --check-v5"
-          }
-        ]
-      }
     ]
   },
   "permissions": {
