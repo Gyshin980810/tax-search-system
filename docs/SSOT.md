@@ -7,8 +7,8 @@
 >
 > 문서 위계: `SSOT.md`(헌법) > `PRD.md`(사양서) > `CLAUDE.md`(행동 요약) > 티켓
 >
-> 작성일: 2026-04-24 (v1.0) / 갱신: 2026-05-04 (v2.0) / 2026-05-14 (v2.1) / 2026-05-22 (v2.2) / 2026-05-25 (v2.3) / 2026-06-05 (v2.4) / 2026-06-05 (v2.5) / 2026-06-16 (v2.6)
-> 버전: 2.6
+> 작성일: 2026-04-24 (v1.0) / 갱신: 2026-05-04 (v2.0) / 2026-05-14 (v2.1) / 2026-05-22 (v2.2) / 2026-05-25 (v2.3) / 2026-06-05 (v2.4) / 2026-06-05 (v2.5) / 2026-06-16 (v2.6) / 2026-06-21 (v2.7)
+> 버전: 2.7
 
 ---
 
@@ -45,7 +45,7 @@
 | 지방세법령정보시스템 API | 지방세 법령 검색 | `LOCAL_TAX_API_KEY` |
 | LLM API (실증) | Gemini 2.0 Flash — 자연어 쿼리 변환·답변 생성 | `GEMINI_API_KEY` |
 | LLM API (운영) | Claude / GPT — 정확도·안정성 단계 | `ANTHROPIC_API_KEY` 또는 `OPENAI_API_KEY` |
-| 임베딩 모델 (M4 이후) | Voyage-2 또는 OpenAI text-embedding-3-small | `VOYAGE_API_KEY` 또는 `OPENAI_API_KEY` |
+| 임베딩 모델 (M4 이후) | voyage-4 (1024차원, TAX-6B-15 이후 운영 기준) | `VOYAGE_API_KEY` |
 | 벡터 DB (M4 이후) | pgvector(Postgres) 또는 Pinecone | `DATABASE_URL` |
 
 ### 1.3 배포 환경
@@ -593,6 +593,7 @@ for (const key of required) {
 | 2026-06-05 | 2.4 | **비법령 V4 시점 라벨 사양 정합 — TAX-037.** §7.2 시점 라벨 목록에 `[결정: YYYY.MM.DD]`(비법령 결정·선고·회신일용) 추가 + 결정일 불명 시 `[현행]` 허용 안내. `lawVerifier.ts` V4 정규식에 `[결정: ...]` 패턴 추가(코드 변경). `buildNonlawCases.ts` `buildTemporalLabel()` 임시 처리 제거. 골든셋 비법령 4건 `[현행]` → `[결정: YYYY.MM.DD]` 갱신. PRD §6.4.1·CLAUDE.md §6.2 동일 정합. | Claude + 회계사 |
 | 2026-06-05 | 2.5 | **비법령 어댑터 매핑 회귀 방지 — TAX-039.** §7.2에 비법령 자료 어댑터 매핑 표 신설(외부 API 필드 → 도메인 `caseNumber`·`issuingBody`·`decisionDate`·`articleTitle`·`content`·`sourceType` 정규화 규칙). 매핑 누락 시 V4 폴백으로 결정일 맥락이 손실됨을 명시. `tests/integration/nationalTaxLaw.test.ts`에 4트랙(판례·법제처해석례·국세청해석·심판례) `decisionDate` 정규식 회귀 단언 추가(어댑터 코드 무변경). | Claude + 회계사 |
 | 2026-06-16 | 2.6 | **Phase 7(운영 데이터 환류) 정식 기능 정합 — 회계사 결정 3건 반영.** §2 디렉토리 책임 표에 `src/domain/` OpsQueryLog·OpsFeedback·contentVerify(FR-23/24/25), `src/adapters/` opsLog(Pg/Null, fail-soft, TAX-030-A), `src/ports/` IOpsLogPort 추가. §7.8 개인정보 처리에 운영 로그 적재 규칙 신설(저장 직전 마스킹 적용·`query_norm` 마스킹만·식별자 컬럼 미존재·fail-soft·정답 자동생성 금지). §13.2에 내용 검증기용 `expectedContent`(mustInclude/mustExclude, 회계사 작성) 필드 + V1~V6 완전 분리·CI 편입 규칙 신설. 회계사 결정 3건: ①운영 데이터 저장소=기존 Neon Postgres 재사용(파일 저장은 Vercel 서버리스 휘발로 폐기, 신규 환경변수 없음) ②수집 범위=성공 쿼리 포함 전부 ③내용 검증기=방안 A(규칙 기반). PRD v2.5·ROADMAP v2.5와 동기. 코드 변경 없음(문서 정합 전용). | Claude + 회계사 |
+| 2026-06-21 | 2.7 | **임베딩 운영 기준 정합 — TAX-6B-15 이후 현재 상태 반영.** §1.2 외부 시스템 표의 임베딩 모델을 `voyage-4(1024차원)`·`VOYAGE_API_KEY`로 확정 표기. OpenAI text-embedding-3-small은 롤백용 어댑터로만 남고 운영 주입은 VoyageEmbeddingAdapter 기준. PRD·ROADMAP·CLAUDE.md와 동기. | Codex (미승인, 검토 후 유지) |
 
 ---
 

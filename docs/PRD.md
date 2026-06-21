@@ -494,7 +494,7 @@ law-verifier는 답변(`LabeledAnswer`)에 대해 다음을 모두 검증한다.
 | RAG 프레임워크 | **Vercel AI SDK** (LangChain 미사용) | RAG가 결정론적 직선 흐름이라 LangChain 추상화가 디버깅을 더 어렵게 함. SSOT §3.2 Adapter 구조와 직접 매핑 (메모리 `project_framework.md`) |
 | LLM | **GPT-4o-mini** (실증·운영) | 저비용 + 빠름 + 한국어 양호 + generateObject 완전 지원 |
 | 벡터 DB | **pgvector** (Postgres 확장) — 또는 Pinecone | Vercel과 궁합 양호. SSOT §1.2 "(향후) 벡터 DB" 자리 |
-| 임베딩 모델 | **Voyage-2** 또는 OpenAI text-embedding-3-small | 한국어 성능·비용 균형 |
+| 임베딩 모델 | **voyage-4 (1024차원)** | TAX-6B-15에서 운영 임베딩을 OpenAI에서 Voyage로 전환. 한국어 법률 의미검색·판례/심판례 벡터 적재 기준 |
 | 외부 API | 국세법령정보시스템 API, 지방세법령정보시스템 API | API 키 발급 완료 |
 | 검증 | Claude Code 서브에이전트 (`.claude/agents/law-verifier.md`) | 독립 감시자 분리 |
 | 배포 | **Vercel** | 50명 이내 규모에 충분 |
@@ -662,7 +662,7 @@ Port (src/ports/)        ← 인터페이스 (교체 가능)
 | `NATIONAL_TAX_API_KEY` | 국세법령 API | TAX-001 |
 | `LOCAL_TAX_API_KEY` | 지방세법령 API | TAX-001 후속 |
 | `OPENAI_API_KEY` | GPT-4o-mini (쿼리 변환·답변 생성) | TAX-002 |
-| `OPENAI_API_KEY` | 임베딩 모델 (text-embedding-3-small, OpenAI 채택 — 회계사 결정 2026-05-23) | TAX-002 재사용 |
+| `VOYAGE_API_KEY` | voyage-4 임베딩 (의미 검색·판례/심판례 벡터 적재) | TAX-6B-15 |
 | `DATABASE_URL` (Postgres + pgvector) | 벡터 DB | TAX-026-B 활성화 |
 
 > **운영 로그 재사용 (v2.5):** 운영 쿼리 로그(FR-23)·신고 로그(FR-24)는 동일 `DATABASE_URL`(Neon Postgres)을 재사용하며 **신규 환경변수가 없다**. 따라서 SSOT §4.1 환경변수 4곳 동시 갱신 대상이 아니다(기존 변수 재사용).
@@ -847,7 +847,7 @@ Port (src/ports/)        ← 인터페이스 (교체 가능)
 | **별도 트랙 2** (Off-roadmap) | TAX-031~034 ✅ | 완결 (2026-05-24~05-25) | $0 추가 | **검색 정확도 개선 + 심판례 관계 그래프** — TAX-031: 법령 정확 매칭+약칭사전(오매칭 제거). TAX-032: 항·호·목 조립(조문 내용 8자→최대 1792자 복원). TAX-033: 심판례 관계 그래프 코어(FR-21, `/api/impact-map`). TAX-034: mermaid 토글 UI(FR-22). 새 환경변수 없음 | 전체 테스트 215개 통과, 회귀 없음 |
 | **M6A** (v2.1 분할) | TAX-015 (가칭) | **3~4주** | $50~120 | 지방세 API 통합(FR-2) + 시점 검색(FR-15) + 골든셋 G-3 20건 + G-4 20건 | 지방세 검색 정상, G-3 시점 정확도 ≥ 95%, G-4 환각률 0% |
 | **M6B** (v2.1 분할) | TAX-016 (가칭) | **3~4주** | $50~150 | 부칙·경과조치(FR-17) + 최근 검색어(FR-11) + 즐겨찾기(FR-12) + UI 다듬기 + 골든셋 G-5 10건 | G-5 ⚫ 라벨 동작, 회계사 분기 설문 만족도 측정 |
-| **M7** (v2.5 신설) | TAX-030-A~C + TAX-6B-9 + TAX-044/045 (운영 1~2주 후) | 운영 단계 (데이터 1~2주 축적 대기선 포함) | $0 추가 (기존 `DATABASE_URL`·OpenAI 키 재사용) | 운영 쿼리 로그 자동 수집(FR-23) + 조용한 틀림 신고(FR-24) + 내용 검증기(FR-25) + 골든셋 환류 스크립트(TAX-030-C) + 비법령 정확도 개선(TAX-044/045) | 마스킹·식별자 미저장 확인, 수집 fail-soft(답변 경로 무영향), 내용 검증기 CI 편입(FR-18), 정답 자동생성 금지(회계사 검수) |
+| **M7** (v2.5 신설) | TAX-030-A~C + TAX-6B-9 + TAX-044/045 (운영 1~2주 후) | 운영 단계 (데이터 1~2주 축적 대기선 포함) | $0 추가 (기존 `DATABASE_URL`·LLM/임베딩 키 재사용) | 운영 쿼리 로그 자동 수집(FR-23) + 조용한 틀림 신고(FR-24) + 내용 검증기(FR-25) + 골든셋 환류 스크립트(TAX-030-C) + 비법령 정확도 개선(TAX-044/045) | 마스킹·식별자 미저장 확인, 수집 fail-soft(답변 경로 무영향), 내용 검증기 CI 편입(FR-18), 정답 자동생성 금지(회계사 검수) |
 
 > **v2.1 변경:**
 > - 각 마일스톤에 **예상 기간**과 **예상 월 비용** 컬럼 신설 (ROADMAP 평가 보고서 반영).
@@ -1019,6 +1019,7 @@ Port (src/ports/)        ← 인터페이스 (교체 가능)
 | 2026-05-25 | 2.3 | **심판례 관계 그래프(Impact Map) 정합 — TAX-035.** §5.2에 **FR-21**(심판례 관계 그래프 코어 `/api/impact-map` ✅ 완료)·**FR-22**(심판례 카드 mermaid 토글 UI ✅ 완료) 신설. §10.1 도메인 엔티티에 `ImpactMap`(중심 심판례·연결 노드·엣지 집합, 원문 명시 연계만) 추가. §16 마일스톤에 별도 트랙 2 행 추가(TAX-031~034 완결, 검색 정확도+관계 그래프). 코드 변경 없음(문서 정합 전용). SSOT v2.3과 동기. | Claude + 회계사 |
 | 2026-06-10 | 2.4 | **Phase 4(M4) 벡터 DB 완결 반영 — TAX-026-A~H.** §5.2 **FR-9**(벡터 DB 의미 유사도 검색) 상태를 `TAX-004 미정` → **✅ 완료(TAX-026-A~H)**로 갱신. §16 마일스톤 **M4 행**을 `TAX-013(가칭) 4~6주` → **`TAX-026-A~H ✅ 완료(2026-06-10)`**로 갱신(산출물: Neon pgvector 실연결 + `taxlaw_embeddings` 마이그레이션 + 임베딩 38건 적재 + `FallbackSearchPort` direct→vector→expanded + `downgradeVectorLabels`, 검증: `matchStage=vector` 스모크 PASS·vitest 387/387). 코드 변경 없음(문서 정합 전용). ROADMAP v2.0과 동기. 잔여 P95 answer tail은 벡터 무관(측정 스크립트 벡터 미경유) — 별도 후속. 리포트 `docs/reports/TAX-026-H_report.md`. | Claude + 회계사 |
 | 2026-06-16 | 2.5 | **Phase 7(운영 데이터 환류) 정식 기능 정합 — 회계사 결정 3건 반영.** §5.2에 **FR-23**(운영 쿼리 로그 자동 수집, fail-soft, `ops_query_log`)·**FR-24**(조용한 틀림 회계사 신고 👎, `ops_feedback`)·**FR-25**(내용 검증기 `src/domain/contentVerify.ts`, V1~V6와 분리, FR-18 CI 편입) 신설(모두 P1·운영 단계 신규). §10.1 도메인 엔티티에 `OpsQueryLog`·`OpsFeedback` 추가 + 순수 함수 `contentVerify` 주석. §12에 운영 로그가 동일 `DATABASE_URL`(Neon) 재사용·**신규 환경변수 없음** 명시(SSOT §4.1 4곳 동시 갱신 비대상). §14.2에 운영 로그(`ops_query_log`·`ops_feedback`) 적재 시 마스킹·식별자 미저장 규칙 저장 직전 적용 보충. §16 마일스톤에 **M7**(TAX-030-A~C+TAX-6B-9+TAX-044/045, $0 추가) 신설. 회계사 결정 3건: ①운영 데이터 저장소=기존 Neon Postgres 재사용(파일 저장 폐기) ②수집 범위=성공 쿼리 포함 전부(TAX-044 도메인 사전 전수 작성용) ③내용 검증기=방안 A(규칙 기반 expectedContent 대조). 불변 제약: 정답 자동생성 금지(회계사 검수)·PII/식별자 미저장·V1~V6 무변경. 코드 변경 없음(문서 정합 전용). SSOT v2.6·ROADMAP v2.5와 동기. | Claude (prd-writer) + 회계사 |
+| 2026-06-21 | 2.6 | **임베딩 운영 기준 정합 — voyage-4 반영.** §8 기술 스택과 §12 외부 의존성 표를 TAX-6B-15 이후 실제 코드 기준인 `voyage-4(1024차원)`·`VOYAGE_API_KEY`로 갱신. §16 M7 비용 문구는 운영 로그 자체 신규 키가 아니라 기존 LLM/임베딩 키 재사용임을 명확화. SSOT v2.7·ROADMAP v2.6과 동기. | Codex (미승인, 검토 후 유지) |
 
 ---
 

@@ -52,6 +52,11 @@ scripts/precedent_full.json
 scripts/_*.mjs
 scripts/_*.log
 
+# 심판례 전량 수집 산출물 (대용량, 적재용 중간 산출물 — git 미커밋) (TAX-6B-18)
+scripts/tribunal_full.json
+scripts/tribunal/
+scripts/embed_case_number_issues.json
+
 # 로컬 논의용 메모 (git 미추적 — 로컬에서만 사용)
 세법 검색 및 RAG 시스템 아키텍처 가이드.md
 
@@ -69,3 +74,8 @@ test-results/
 .auth/
 
 .vercel
+
+# Codex 툴링 (로컬 전용 — AI 에이전트 설정, git 미추적)
+AGENTS.md
+.codex/
+.agents/

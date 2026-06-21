@@ -171,7 +171,8 @@ UI (app/)  →  API Route (app/api/)  →  Usecase (src/usecases/)  →  Adapter
 | 환경변수 | 용도 | 추가 단계 |
 |---|---|---|
 | `NATIONAL_TAX_API_KEY` | 국세법령정보시스템 API | M1 |
-| `OPENAI_API_KEY` | GPT-4o-mini (쿼리 변환·답변 생성) + text-embedding-3-small (임베딩) | M2 (TAX-011-B) |
+| `OPENAI_API_KEY` | GPT-4o-mini (쿼리 변환·답변 생성) | M2 (TAX-011-B) |
+| `VOYAGE_API_KEY` | voyage-4 임베딩 (의미 검색·판례/심판례 벡터 적재) | M6B (TAX-6B-15) |
 | `DATABASE_URL` | pgvector 벡터 DB (Postgres + pgvector, Neon·Supabase·Vercel Postgres) | M4 (TAX-026-B) |
 
 ---
