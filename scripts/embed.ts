@@ -19,10 +19,11 @@
  */
 
 import { createHash } from 'crypto'
-import { readFileSync } from 'fs'
+import { readFileSync, writeFileSync } from 'fs'
 import { Pool } from 'pg'
 import type { TaxLaw } from '../src/domain/TaxLaw'
 import { VoyageEmbeddingAdapter } from '../src/adapters/embedding'
+import { inspectNonLawCaseNumbers } from './embedQuality'
 
 // 환경변수 직접 로드 (server-only 제약 없는 스크립트 컨텍스트)
 const DATABASE_URL = process.env.DATABASE_URL
@@ -42,6 +43,10 @@ const args = process.argv.slice(2)
 const inputIdx = args.indexOf('--input')
 const inputFile = inputIdx !== -1 ? args[inputIdx + 1] : null
 const dryRun = args.includes('--dry-run')
+const allowCaseIssues = args.includes('--allow-case-issues')
+
+/** 비법령 사건번호 품질 리포트 — 적재 전 중복·누락 발견 시 생성 */
+const CASE_ISSUE_REPORT_PATH = 'scripts/embed_case_number_issues.json'
 
 /**
  * 배치 크기 — voyage-4 단일 요청은 문서 수·토큰 양쪽 한도를 가진다.
@@ -74,6 +79,22 @@ async function main() {
   // content가 있는 항목만 임베딩 대상
   const laws = rawLaws.filter((l) => l.content.trim().length > 0)
   console.log(`[embed] 전체 ${rawLaws.length}건 중 content 보유 ${laws.length}건 처리 예정`)
+
+  const qualityReport = inspectNonLawCaseNumbers(laws)
+  if (qualityReport.hasIssues) {
+    writeFileSync(CASE_ISSUE_REPORT_PATH, `${JSON.stringify(qualityReport, null, 2)}\n`, 'utf8')
+    console.error(
+      `[embed] 비법령 caseNumber 품질 오류: ` +
+      `중복 ${qualityReport.duplicateCaseNumbers.length}그룹, ` +
+      `누락 ${qualityReport.missingCaseNumbers.length}건. ` +
+      `리포트: ${CASE_ISSUE_REPORT_PATH}`,
+    )
+    if (!allowCaseIssues) {
+      console.error('[embed] 적재를 중단합니다. 검토 후 재실행하거나 예외 승인 시 --allow-case-issues를 사용하세요.')
+      process.exit(1)
+    }
+    console.warn('[embed] --allow-case-issues 지정으로 품질 오류가 있어도 계속 진행합니다.')
+  }
 
   if (dryRun) {
     console.log('[embed] --dry-run 모드: DB 저장 없이 종료합니다.')
