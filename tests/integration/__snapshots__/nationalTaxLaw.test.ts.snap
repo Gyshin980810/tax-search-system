@@ -22,9 +22,7 @@ exports[`NationalTaxLawAdapter 통합 테스트 (MSW) > TAX-018 안전망 — �
   "articleNumber": "",
   "articleTitle": "양도소득세 비과세 대상 여부",
   "caseNumber": "12-0368",
-  "content": "양도소득세 비과세 대상에 해당하는지 여부
-비과세 대상에 해당한다.
-관련 법령 규정에 따르면 해당 자산은 비과세 요건을 충족한다.",
+  "content": "",
   "decisionDate": "2026-02-20",
   "enforcementDate": "",
   "issuingBody": "법제처",

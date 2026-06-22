@@ -126,17 +126,7 @@ interface RawExpcSearch {
   expc?: RawExpc | RawExpc[]
 }
 
-// 법령해석례 본문 조회(target=expc, ID) 응답
-interface RawExpcService {
-  안건명?: string
-  안건번호?: string
-  해석기관명?: string
-  해석일자?: string
-  질의기관명?: string
-  질의요지?: string
-  회답?: string
-  이유?: string
-}
+// (TAX-6B-19) 법령해석례 본문 조회(RawExpcService)는 목록 전용 전환으로 제거됨.
 
 // 국세청 법령해석 목록 조회(target=ntsCgmExpc) 응답 — TAX-016B 실호출로 확정 (2026-05-22)
 // ⚠️ 본문(전문) 미제공 — 목록만 제공. 발췌 인용 불가 → 참고 목록(references) 트랙(TAX-015B/D).
@@ -543,14 +533,15 @@ function buildNonLawTaxLaw(base: NonLawBase): TaxLaw {
  *  (Phase 1, TAX-015/016A/016B/016C)
  *
  * [법령]      lawSearch.do(target=law)          → lawService.do → 조문(article)
- * [법제처해석] lawSearch.do(target=expc)         → lawService.do → 본문(질의요지·회답·이유)  [TAX-016A]
- * [국세청해석] lawSearch.do(target=ntsCgmExpc)   → (목록만, 본문 없음) → 참고 목록             [TAX-016B]
+ * [법제처해석] lawSearch.do(target=expc)         → (목록만, 본문 미조회) → 참고 목록             [TAX-6B-19]
+ * [국세청해석] lawSearch.do(target=ntsCgmExpc)   → (목록만, 본문 API 없음) → 참고 목록           [TAX-016B]
  * [심판례]    lawSearch.do(target=ttSpecialDecc) → lawService.do → 본문(주문·재결요지·이유)  [TAX-016C]
  * [판례]      lawSearch.do(target=prec)         → (법원 출처만) lawService.do → 본문
  *
  * 다섯 자료를 병렬 검색해 Trust Tier 순(법령→해석례→심판례→판례)으로 병합한다.
  * 비법령(해석례·심판례·판례) 검색이 실패해도 법령 결과는 반환한다(부분 실패 허용).
- * 국세청 해석은 본문이 없어 발췌 인용 대상이 아니라 참고 목록으로만 노출된다(TAX-015B/D).
+ * TAX-6B-19: 해석례(expc·ntsCgmExpc)는 목록·참고 링크로 통일 — 본문 미조회, 발췌 인용·V검증 비대상.
+ *   본문은 sourceUrl(키 없는 공개 뷰어)로 회계사가 직접 확인한다.
  * 조세심판원 결정례는 본문이 있어 발췌 인용(citable)·V검증 대상이다(TAX-016C).
  * Phase 4(벡터 DB) 이후 의미 유사도 검색으로 확장 예정.
  */
@@ -821,11 +812,13 @@ export class NationalTaxLawAdapter implements ISearchPort {
   }
 
   /**
-   * 법령해석례 검색 (target=expc) — 목록 조회 후 각 본문 조회 (TAX-016A)
+   * 법령해석례 검색 (target=expc) — 목록만 조회 (TAX-6B-19)
    *
-   * 판례와 동일한 2단계(목록→본문). 본문(질의요지·회답·이유)이 제공되므로 발췌 인용 가능.
-   * 본문 조회 실패 시 content는 빈 문자열 → 상위 generateAnswer가 참고 목록으로 처리(TAX-015B).
-   * 기재부 질의 법령해석도 expc에 포함됨(질의기관명=기획재정부).
+   * TAX-6B-19: 본문 조회(lawService.do, N+1)를 제거하고 목록만 사용한다.
+   *  해석례(expc·ntsCgmExpc)를 모두 목록·참고 링크 트랙으로 통일하기 위함(발췌 인용·V검증 비대상).
+   *  본문(질의요지·회답·이유)은 sourceUrl(키 없는 공개 뷰어 링크)로 회계사가 직접 확인한다.
+   *  관련도 정렬은 유지 — 참고 목록도 관련순 노출이 유의미.
+   *  기재부 질의 법령해석도 expc에 포함됨(질의기관명=기획재정부).
    */
   private async searchInterpretations(keyword: string): Promise<TaxLaw[]> {
     // TAX-043: 비법령 입력 정규화 — 해석례는 사건번호 정확매칭 미지원이므로 keyword만 사용
@@ -835,7 +828,7 @@ export class NationalTaxLawAdapter implements ISearchPort {
       target: 'expc',
       type: 'JSON',
       query: n.keyword,
-      // TAX-6B-11: 심판례와 동일 — 목록은 넓게, 본문은 관련도 상위 K건만.
+      // TAX-6B-11: 목록은 넓게 가져와 관련 자료 유실을 막는다.
       display: NONLAW_LIST_DISPLAY,
       page: '1',
     })
@@ -846,7 +839,7 @@ export class NationalTaxLawAdapter implements ISearchPort {
 
     const list = Array.isArray(ex.expc) ? ex.expc : [ex.expc]
 
-    // TAX-6B-11: 안건명 관련도로 정렬 → 상위 K건만 본문 조회, 나머지는 content=''(참고 목록 후보).
+    // 안건명 관련도로 정렬(결정론성: 날짜↓·식별자↑ 보조키). 본문은 조회하지 않고 content=''.
     const terms = extractTerms(n.keyword)
     const ranked = rankByRelevance(
       list,
@@ -855,38 +848,10 @@ export class NationalTaxLawAdapter implements ISearchPort {
       (e) => String(e.회신일자 ?? ''),
       (e) => String(e.안건번호 ?? ''),
     )
-    const all = await Promise.all(
-      ranked.map(async (e, i) => {
-        const content = i < NONLAW_BODY_FETCH_LIMIT
-          ? await this.fetchInterpretationBody(e.법령해석례일련번호)
-          : ''
-        return this.toInterpretationTaxLaw(e, content)
-      }),
-    )
-    return all
+    return ranked.map((e) => this.toInterpretationTaxLaw(e, ''))
   }
 
-  /** 법령해석례 본문 조회. 미제공·실패 시 빈 문자열 반환(부분 실패 허용) */
-  private async fetchInterpretationBody(expcSeq: string): Promise<string> {
-    try {
-      const params = new URLSearchParams({
-        OC: this.apiKey,
-        target: 'expc',
-        ID: expcSeq,
-        type: 'JSON',
-      })
-      const res = await fetchWithTimeout(`${BASE_URL}/DRF/lawService.do?${params}`)
-      const data = await res.json() as { ExpcService?: RawExpcService }
-      const e = data.ExpcService
-      if (!e) return ''
-      // 질의요지 + 회답 + 이유를 원문 그대로 결합 (CLAUDE.md §6.1)
-      return [e.질의요지, e.회답, e.이유].filter(Boolean).join('\n').trim()
-    } catch {
-      return ''
-    }
-  }
-
-  /** 법령해석례 목록 항목 + 본문 → TaxLaw (sourceType='해석례', T3) */
+  /** 법령해석례 목록 항목 → TaxLaw (sourceType='해석례', T3, 목록만·content='') */
   private toInterpretationTaxLaw(e: RawExpc, content: string): TaxLaw {
     const caseNo = (e.안건번호 ?? '').trim()
     const issuingBody = (e.회신기관명 ?? '').trim()  // 해석을 회신한 기관(예: 법제처)

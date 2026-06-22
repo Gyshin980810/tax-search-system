@@ -315,6 +315,8 @@
 
 > **FR-19/20 보충 (v2.2):** FR-19(직접검색)는 정확한 키워드 일치 기반이고, FR-9/FR-10(벡터 DB)은 의미 유사도 기반입니다. 둘은 **대체가 아니라 §9.3 3단계 fallback 안에서 보완 관계**로 결합되며, 벡터 DB 도입 시 FR-19를 재구현하지 않습니다. FR-19/20은 새 환경변수 없이 기존 `NATIONAL_TAX_API_KEY`(국가법령정보 공동활용 OC 키)를 재사용합니다.
 
+> **해석례 처리 정합 (TAX-6B-19, 2026-06-22):** 해석례(법제처 `expc` + 국세청 `ntsCgmExpc`)는 **목록만 조회**하고 본문은 조회하지 않는다(`content=''`). 본문은 각 항목의 원문 링크(`sourceUrl`, API 키 없는 공개 뷰어)로 회계사가 직접 확인한다. 따라서 해석례는 항상 FR-20 **참고 목록** 트랙으로만 노출되며 발췌 인용·V검증 대상이 아니다. 사유: 국세청 `ntsCgmExpc` 본문 조회 API 부재를 확정(`OC=data` 공개 테스트키 포함 3중 실증)하여 두 해석례의 처리를 일관화하고, expc 본문 N+1 호출을 제거해 P95를 개선한다. 심판례·판례의 본문 발췌는 종전대로 유지된다.
+
 ### 5.3 명시적 비기능 (Out of Scope)
 
 - 회계사 계정·로그인 시스템 (MVP 한정 — Post-MVP에서 재검토 가능)
@@ -1020,6 +1022,7 @@ Port (src/ports/)        ← 인터페이스 (교체 가능)
 | 2026-06-10 | 2.4 | **Phase 4(M4) 벡터 DB 완결 반영 — TAX-026-A~H.** §5.2 **FR-9**(벡터 DB 의미 유사도 검색) 상태를 `TAX-004 미정` → **✅ 완료(TAX-026-A~H)**로 갱신. §16 마일스톤 **M4 행**을 `TAX-013(가칭) 4~6주` → **`TAX-026-A~H ✅ 완료(2026-06-10)`**로 갱신(산출물: Neon pgvector 실연결 + `taxlaw_embeddings` 마이그레이션 + 임베딩 38건 적재 + `FallbackSearchPort` direct→vector→expanded + `downgradeVectorLabels`, 검증: `matchStage=vector` 스모크 PASS·vitest 387/387). 코드 변경 없음(문서 정합 전용). ROADMAP v2.0과 동기. 잔여 P95 answer tail은 벡터 무관(측정 스크립트 벡터 미경유) — 별도 후속. 리포트 `docs/reports/TAX-026-H_report.md`. | Claude + 회계사 |
 | 2026-06-16 | 2.5 | **Phase 7(운영 데이터 환류) 정식 기능 정합 — 회계사 결정 3건 반영.** §5.2에 **FR-23**(운영 쿼리 로그 자동 수집, fail-soft, `ops_query_log`)·**FR-24**(조용한 틀림 회계사 신고 👎, `ops_feedback`)·**FR-25**(내용 검증기 `src/domain/contentVerify.ts`, V1~V6와 분리, FR-18 CI 편입) 신설(모두 P1·운영 단계 신규). §10.1 도메인 엔티티에 `OpsQueryLog`·`OpsFeedback` 추가 + 순수 함수 `contentVerify` 주석. §12에 운영 로그가 동일 `DATABASE_URL`(Neon) 재사용·**신규 환경변수 없음** 명시(SSOT §4.1 4곳 동시 갱신 비대상). §14.2에 운영 로그(`ops_query_log`·`ops_feedback`) 적재 시 마스킹·식별자 미저장 규칙 저장 직전 적용 보충. §16 마일스톤에 **M7**(TAX-030-A~C+TAX-6B-9+TAX-044/045, $0 추가) 신설. 회계사 결정 3건: ①운영 데이터 저장소=기존 Neon Postgres 재사용(파일 저장 폐기) ②수집 범위=성공 쿼리 포함 전부(TAX-044 도메인 사전 전수 작성용) ③내용 검증기=방안 A(규칙 기반 expectedContent 대조). 불변 제약: 정답 자동생성 금지(회계사 검수)·PII/식별자 미저장·V1~V6 무변경. 코드 변경 없음(문서 정합 전용). SSOT v2.6·ROADMAP v2.5와 동기. | Claude (prd-writer) + 회계사 |
 | 2026-06-21 | 2.6 | **임베딩 운영 기준 정합 — voyage-4 반영.** §8 기술 스택과 §12 외부 의존성 표를 TAX-6B-15 이후 실제 코드 기준인 `voyage-4(1024차원)`·`VOYAGE_API_KEY`로 갱신. §16 M7 비용 문구는 운영 로그 자체 신규 키가 아니라 기존 LLM/임베딩 키 재사용임을 명확화. SSOT v2.7·ROADMAP v2.6과 동기. | Codex (미승인, 검토 후 유지) |
+| 2026-06-22 | 2.7 | **해석례 목록 전용 전환 — TAX-6B-19.** §5.2 FR-19/20에 해석례 처리 정합 보충 추가: 해석례(`expc`·`ntsCgmExpc`)는 목록만 조회(`content=''`), 본문은 원문 링크로 확인, 항상 FR-20 참고 목록 트랙. expc 본문 N+1 조회 제거(P95 개선). 사유=국세청 ntsCgmExpc 본문 API 부재 확정. SSOT v2.8과 동기. | Claude + 회계사 |
 
 ---
 

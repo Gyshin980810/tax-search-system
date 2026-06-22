@@ -413,7 +413,7 @@ describe('NationalTaxLawAdapter 통합 테스트 (MSW)', () => {
 
   // ─── 시나리오 5: 법령해석례 병합 (TAX-016A) ──────────────────────────────
   describe('법령해석례 검색 (TAX-016A)', () => {
-    it('[해석례] 법령해석례는 본문·메타·T3·키없는 링크를 가진다', async () => {
+    it('[해석례] 법령해석례는 목록·메타·T3·키없는 링크를 가진다 (TAX-6B-19: 본문 미조회)', async () => {
       server.use(...lawAndPrecHandlers)
 
       const adapter = new NationalTaxLawAdapter()
@@ -426,11 +426,9 @@ describe('NationalTaxLawAdapter 통합 테스트 (MSW)', () => {
       expect(expc!.issuingBody).toBe('법제처')           // 회신기관
       expect(expc!.decisionDate).toBe('2026-02-20')      // 회신일자 정규화
       expect(expc!.articleTitle).toBe('양도소득세 비과세 대상 여부')
-      // 본문 = 질의요지 + 회답 + 이유 결합(원문 보존)
-      expect(expc!.content).toContain('양도소득세 비과세 대상에 해당하는지')
-      expect(expc!.content).toContain('비과세 대상에 해당한다')
-      expect(expc!.content).toContain('비과세 요건을 충족한다')
-      // 원문 링크에 API 키(OC) 미포함, 공개 뷰어 경로 (CLAUDE.md §7)
+      // TAX-6B-19: 본문 조회 제거 — content는 항상 빈 문자열(참고 목록 트랙)
+      expect(expc!.content).toBe('')
+      // 본문은 원문 링크로 확인. API 키(OC) 미포함, 공개 뷰어 경로 (CLAUDE.md §7)
       expect(expc!.sourceUrl).not.toContain('OC=')
       expect(expc!.sourceUrl).toContain('expcInfoP.do')
     })
