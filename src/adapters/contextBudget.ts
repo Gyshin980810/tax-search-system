@@ -1,5 +1,6 @@
 import 'server-only'
 import type { TaxLaw, TrustTier } from '../domain/TaxLaw'
+import { scoreRelevance } from '../domain/nonLawRelevance'
 
 /**
  * TAX-042F — LLM 입력 컨텍스트 윈도우 보호 유틸
@@ -155,12 +156,18 @@ export function extractQuestionKeywords(question: string): string[] {
 }
 
 /**
- * 질문 키워드와 lawName + articleTitle의 매칭 개수.
- * 같은 Trust Tier 내에서 직접 관련 조문을 우선 보존하기 위한 보조 점수.
+ * 질문 키워드와 조문의 관련도 점수.
+ * 같은 Trust Tier 내에서 직접 관련 조문을 우선 보존하기 위한 보조 점수다.
+ *
+ * TAX-6B-25: 제목(lawName + articleTitle) **뿐 아니라 본문(content)** 도 반영한다.
+ *  기존엔 제목만 봐서, 쟁점 키워드("손금")가 조문 제목엔 없고 본문에만 있는 조문이
+ *  관련도 0으로 밀려 큰 법령의 토큰 컷오프에서 탈락했다(재현율 결함).
+ *  도메인의 단일 진실 원천 nonLawRelevance.scoreRelevance(제목=강신호 2, 본문=약신호 1,
+ *  양쪽 중복은 강신호로 1회만)를 재사용해 비법령 참고목록과 같은 기준으로 통일한다.
+ *  content는 includes로 읽기만 하며 원문을 변형하지 않는다 (CLAUDE.md §6.1).
  */
 export function relevanceScore(law: TaxLaw, keywords: string[]): number {
-  const haystack = `${law.lawName} ${law.articleTitle}`
-  return keywords.filter((k) => haystack.includes(k)).length
+  return scoreRelevance(`${law.lawName} ${law.articleTitle}`, law.content, keywords)
 }
 
 /**
@@ -200,10 +207,14 @@ export function truncateForContext(
 
   // (2) Tier + 키워드 가중치 정렬
   const keywords = extractQuestionKeywords(question)
+  // TAX-6B-25: 관련도를 조문당 1회만 계산한다(본문까지 훑으므로 comparator에서 반복 스캔 금지).
+  //   비교 함수는 사전 계산한 점수만 참조 → O(n)회 산정 + O(n log n) 비교.
+  const scoreOf = new Map<TaxLaw, number>()
+  for (const law of laws) scoreOf.set(law, relevanceScore(law, keywords))
   const sorted = [...laws].sort((a, b) => {
     const tierDiff = TIER_RANK[a.trustTier] - TIER_RANK[b.trustTier]
     if (tierDiff !== 0) return tierDiff
-    return relevanceScore(b, keywords) - relevanceScore(a, keywords)
+    return scoreOf.get(b)! - scoreOf.get(a)!
   })
 
   // (3) 각 조문 압축 + (4) 누적 컷오프
