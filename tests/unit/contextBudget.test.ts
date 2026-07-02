@@ -94,9 +94,30 @@ describe('extractQuestionKeywords / relevanceScore — 매칭 가중치', () => 
     expect(keywords).not.toContain('관련')
   })
 
-  it('lawName + articleTitle에서 매칭되는 키워드 개수', () => {
+  it('제목(lawName + articleTitle) 매칭은 강신호 2점씩 (TAX-6B-25)', () => {
     const law = makeLaw({ lawName: '법인세법 시행령', articleTitle: '손비의 범위' })
-    expect(relevanceScore(law, ['법인세법', '손비'])).toBe(2)
+    // '법인세법' → lawName 매칭(+2), '손비' → articleTitle 매칭(+2)
+    expect(relevanceScore(law, ['법인세법', '손비'])).toBe(4)
+  })
+
+  it('제목엔 없고 본문에만 있는 쟁점은 약신호 1점 (TAX-6B-25 핵심)', () => {
+    // 제목("법인세법 목적")엔 '접대비'가 없지만 본문엔 있음 → 기존엔 0점이던 것이 1점으로
+    const law = makeLaw({
+      articleTitle: '목적',
+      content: '접대비의 손금산입 한도는 다음과 같이 정한다.',
+    })
+    expect(relevanceScore(law, ['접대비'])).toBe(1)
+  })
+
+  it('제목·본문 양쪽에 있으면 강신호로 1회만 계산(중복 합산 금지)', () => {
+    const law = makeLaw({ articleTitle: '손비의 범위', content: '손비란 다음과 같다.' })
+    // '손비'가 제목·본문 양쪽에 있어도 강신호 2점만(2+1=3 아님)
+    expect(relevanceScore(law, ['손비'])).toBe(2)
+  })
+
+  it('제목·본문 어디에도 없는 키워드는 0점', () => {
+    const law = makeLaw({ articleTitle: '목적', content: '법인세법은 다음과 같이 정한다.' })
+    expect(relevanceScore(law, ['양도소득세'])).toBe(0)
   })
 })
 
@@ -127,6 +148,26 @@ describe('truncateForContext — 컨텍스트 윈도우 보호', () => {
     expect(result.promptLaws.length).toBeGreaterThanOrEqual(1)
     expect(result.promptLaws.length).toBe(result.originalRefs.length)
     expect(result.originalRefs[0].trustTier).toBe('T1')
+  })
+
+  it('본문에만 쟁점이 있는 조문이 컷오프에서 보존된다 (TAX-6B-25 핵심 회귀)', () => {
+    const filler = '가'.repeat(4000)
+    const laws = [
+      // A(제10조): 제목·본문 모두 쟁점 없음 → 관련도 0
+      makeLaw({ articleNumber: '제10조', articleTitle: '목적', content: filler }),
+      // B(제25조): 제목엔 없지만 본문에 쟁점("접대비") 있음 → 관련도 1
+      //   기존(제목만 평가)에선 A·B 모두 0점 동점 → 입력 순서대로 A가 앞 → 예산 부족 시 B 탈락.
+      //   TAX-6B-25 이후 B가 1점으로 앞서 정렬 → 예산 1건이면 B가 살아남아야 한다.
+      makeLaw({
+        articleNumber: '제25조',
+        articleTitle: '기타',
+        content: `접대비 손금산입 한도는 다음과 같다. ${filler}`,
+      }),
+    ]
+    // 큰 조문 1건만 들어갈 예산으로 컷오프 강제
+    const result = truncateForContext(laws, '접대비 손금 한도', 3000)
+    expect(result.originalRefs.length).toBe(1)
+    expect(result.originalRefs[0].articleNumber).toBe('제25조')
   })
 
   it('최소 1건 보장 — 모든 조문이 한도 초과여도 sorted[0] 포함', () => {
