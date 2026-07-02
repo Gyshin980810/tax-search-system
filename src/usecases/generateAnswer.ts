@@ -16,7 +16,8 @@ import type { TemporalContext } from '../domain/TemporalContext'
 import type { TaxLaw } from '../domain/TaxLaw'
 import type { Citation } from '../domain/Citation'
 import type { VerificationResult } from '../domain/VerificationResult'
-import type { MatchStage } from '../domain/SearchResult'
+import type { MatchStage, SearchResult } from '../domain/SearchResult'
+import type { SearchQuery } from '../domain/SearchQuery'
 
 /**
  * matchStage가 정의된 경우에만 4번째 인수로 전달한다 (TAX-026-G).
@@ -335,6 +336,20 @@ async function safeRecord(opsLog: IOpsLogPort | undefined, entry: OpsQueryLogEnt
   }
 }
 
+/**
+ * 검색 실행 — rewrite가 만든 전체 쿼리를 병합 검색한다 (TAX-6B-26).
+ *
+ * searchMany를 구현한 포트(NationalTaxLawAdapter·FallbackSearchPort)는 다중 쿼리를
+ * 안전하게 병합하고, 미구현 포트(테스트 더블 등)는 queries[0] 단일 검색으로 폴백한다.
+ * 이렇게 폴백을 두는 이유: FallbackSearchPort를 쿼리별로 반복 호출하면 matchStage가
+ * 뒤섞여 과대주장 위험이 생기므로(§6.3), 병합은 포트 내부에서만 수행하기 위함이다.
+ */
+async function runSearch(searchPort: ISearchPort, queries: SearchQuery[]): Promise<SearchResult> {
+  return searchPort.searchMany
+    ? searchPort.searchMany(queries)
+    : searchPort.search(queries[0])
+}
+
 // ─── Usecase ─────────────────────────────────────────────────────────────────
 
 /**
@@ -380,8 +395,10 @@ export async function generateAnswer(
     // [1] 자연어 쿼리 변환
     const queries = await queryRewriter.rewrite(question, temporal)
 
-    // [2] 외부 API 검색 — 첫 번째 쿼리 사용 (Phase 4에서 다중 쿼리 확장 예정)
-    const searchResult = await searchPort.search(queries[0])
+    // [2] 외부 API 검색 — rewrite가 만든 모든 쿼리를 병합 검색 (TAX-6B-26)
+    //   searchMany를 구현한 포트만 다중 쿼리를 안전하게 병합(matchStage 일관).
+    //   미구현 포트(테스트 더블 등)는 queries[0] 단일 검색으로 안전 폴백.
+    const searchResult = await runSearch(searchPort, queries)
     matchStage = searchResult.matchStage
 
     // [2-a] 발췌 인용 대상(citable)과 본문 없는 참고 풀(contentlessRefs) 분리 (TAX-015B)
@@ -422,7 +439,8 @@ export async function generateAnswer(
         recover: async (s) => {
           if (!s.verifyResult.checks.v1) {
             // V1 경로: 재검색 → 재분리 → 재생성 → 재검증 (참고 풀도 갱신)
-            const sr       = await searchPort.search(queries[0])
+            //   초기 검색과 동일하게 전체 쿼리를 재검색해, queries[0]만 반복하던 협소함을 해소(TAX-6B-26).
+            const sr       = await runSearch(searchPort, queries)
             const newSplit = splitResults(sr.items)
             const ans      = await callGenerate(answerGenerator, newSplit.citable, question, temporal, sr.matchStage)
             const vr       = await verifier.verify(ans, newSplit.citable)
