@@ -7,6 +7,7 @@ import { ApiTimeoutError, ApiUnavailableError } from '../domain/errors'
 import { normalizeLawName, selectBestLaw, splitLegalAxis } from '../domain/lawAliases'
 import { normalizeNonLawQuery } from '../domain/nonLawQueryNormalize'
 import { extractTerms, scoreRelevance } from '../domain/nonLawRelevance'
+import { mergeSearchItems } from '../domain/searchMerge'
 
 // ─── 국세법령정보시스템 API 응답 타입 ──────────────────────────────────────
 
@@ -596,6 +597,20 @@ export class NationalTaxLawAdapter implements ISearchPort {
     const ttl = items.length === 0 ? CACHE_EMPTY_TTL_MS : CACHE_TTL_MS
     cacheSet(cacheKey, { result, expiresAt: Date.now() + ttl })
     return result
+  }
+
+  /**
+   * 다중 쿼리 검색 (TAX-6B-26) — rewrite가 만든 여러 검색어를 병렬 검색 후 병합.
+   *
+   * 각 쿼리는 기존 search()를 그대로 재사용하므로 캐시(keyword|hint|targetDate)가 적용된다.
+   * identityKey 기준 순서 보존 병합으로, 대체 표현·조문 힌트·다른 쟁점축의 근거가 모두 반영된다
+   * (기존엔 queries[0]만 검색해 나머지가 버려지던 재현율 손실 해소).
+   * matchStage는 붙이지 않는다(direct 어댑터 책임 밖) — FallbackSearchPort가 병합본에 부여한다.
+   */
+  async searchMany(queries: SearchQuery[]): Promise<SearchResult> {
+    const results = await Promise.all(queries.map((q) => this.search(q)))
+    const items = mergeSearchItems(results.map((r) => r.items))
+    return { items, totalCount: items.length }
   }
 
   /** Step 1: 법령 목록 검색 */
