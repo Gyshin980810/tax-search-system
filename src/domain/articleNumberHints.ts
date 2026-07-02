@@ -56,7 +56,10 @@ export const ARTICLE_NUMBER_HINTS: readonly ArticleNumberHint[] = [
   { keywords: ['법인세 과세표준 세율', '법인세 세율 구간', '법인세 과세표준 구간'], lawName: '법인세법', articleNumber: '제55조', source: 'G-S-법인-01' },
   { keywords: ['감가상각비 손금', '감가비 손금 산입', '감가비 손금산입 한도'], lawName: '법인세법', articleNumber: '제23조', source: 'G-S-법인-02' },
   { keywords: ['법인세 과세표준 신고', '법인세 신고 기한'], lawName: '법인세법', articleNumber: '제60조', source: 'G-S-법인-03' },
-  { keywords: ['기업업무추진비', '접대비 손금불산입한도', '접대비 한도', '기업업무추진비 한도'], lawName: '법인세법', articleNumber: '제25조', source: 'G-S-법인-05' },
+  // TAX-6B-29 운영 로그 보강(2026-07-02): '접대비'가 '한도'·'손금불산입한도' 없이
+  // 단독으로만 등장하는 실제 질문("접대비 손금 인정 기준…")이 힌트를 놓쳐 법령 없이
+  // 심판례만 노출된 사례 확인 → 단독 키워드 추가.
+  { keywords: ['기업업무추진비', '접대비', '접대비 손금불산입한도', '접대비 한도', '기업업무추진비 한도'], lawName: '법인세법', articleNumber: '제25조', source: 'G-S-법인-05' },
   { keywords: ['법인세법 시행령 손비', '법인세 손비의 범위', '법인세 손비 범위'], lawName: '법인세법 시행령', articleNumber: '제19조', source: 'G-S-법인-06' },
   { keywords: ['업무무관 지출', '업무 무관 지출', '업무무관 지출 손금 인정'], lawName: '법인세법', articleNumber: '제19조', source: 'G-3' },
   { keywords: ['법인세 중간예납'], lawName: '법인세법', articleNumber: '제63조' },
