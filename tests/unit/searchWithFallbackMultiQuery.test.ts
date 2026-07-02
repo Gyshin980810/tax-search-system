@@ -42,13 +42,20 @@ describe('FallbackSearchPort.searchMany — 방안 A (direct 병합 후 벡터 f
 
   it('(1) 쿼리별 direct 결과를 병합해 THRESHOLD를 넘기면 벡터 호출 없이 direct 반환', async () => {
     // 각 쿼리는 content 2건씩 → 단일이면 THRESHOLD(3) 미달이지만 병합하면 4건 → 충족
+    // TAX-6B-30: 게이트가 관련도를 보므로 본문에 쿼리 키워드를 포함시켜 "관련 있는" 조문으로 둔다.
     vi.mocked(mockDirectPort.search)
       .mockResolvedValueOnce({
-        items: [makeLaw({ articleNumber: '제1조' }), makeLaw({ articleNumber: '제2조' })],
+        items: [
+          makeLaw({ articleNumber: '제1조', content: '접대비 손금 산입' }),
+          makeLaw({ articleNumber: '제2조', content: '접대비 한도 계산' }),
+        ],
         totalCount: 2,
       } as SearchResult)
       .mockResolvedValueOnce({
-        items: [makeLaw({ articleNumber: '제3조' }), makeLaw({ articleNumber: '제4조' })],
+        items: [
+          makeLaw({ articleNumber: '제3조', content: '기업업무추진비 범위' }),
+          makeLaw({ articleNumber: '제4조', content: '기업업무추진비 한도' }),
+        ],
         totalCount: 2,
       } as SearchResult)
 
@@ -69,10 +76,11 @@ describe('FallbackSearchPort.searchMany — 방안 A (direct 병합 후 벡터 f
       totalCount: 1,
     } as SearchResult)
     vi.mocked(mockEmbedder.embed).mockResolvedValue([0.1, 0.2])
+    // TAX-6B-30: 벡터 결과가 THRESHOLD를 채우려면 쿼리 키워드와 관련 있어야 한다(본문에 포함).
     vi.mocked(mockVectorPort.searchSimilar).mockResolvedValue([
-      { item: makeLaw({ sourceType: '심판례', caseNumber: 'A1', lawName: '조세심판원 결정례' }), similarity: 0.9 },
-      { item: makeLaw({ sourceType: '심판례', caseNumber: 'A2', lawName: '조세심판원 결정례' }), similarity: 0.8 },
-      { item: makeLaw({ sourceType: '심판례', caseNumber: 'A3', lawName: '조세심판원 결정례' }), similarity: 0.7 },
+      { item: makeLaw({ sourceType: '심판례', caseNumber: 'A1', lawName: '조세심판원 결정례', content: '가지급금 인정이자' }), similarity: 0.9 },
+      { item: makeLaw({ sourceType: '심판례', caseNumber: 'A2', lawName: '조세심판원 결정례', content: '가지급금 업무무관 판단' }), similarity: 0.8 },
+      { item: makeLaw({ sourceType: '심판례', caseNumber: 'A3', lawName: '조세심판원 결정례', content: '인정이자 계산 기준' }), similarity: 0.7 },
     ])
 
     const fallback = new FallbackSearchPort(mockDirectPort, mockEmbedder, mockVectorPort)
@@ -121,8 +129,9 @@ describe('FallbackSearchPort.searchMany — 방안 A (direct 병합 후 벡터 f
   })
 
   it('(5) search(query)는 searchMany([query])로 위임돼 단일 쿼리 동작이 동일하다', async () => {
+    // TAX-6B-30: 관련도 게이트 통과를 위해 본문에 쿼리 키워드(부가가치세)를 포함시킨다.
     const richLaws = Array.from({ length: 3 }, (_, i) =>
-      makeLaw({ articleNumber: `제${i + 1}조` }),
+      makeLaw({ articleNumber: `제${i + 1}조`, content: '부가가치세 과세표준 산정' }),
     )
     vi.mocked(mockDirectPort.search).mockResolvedValue({
       items: richLaws,
