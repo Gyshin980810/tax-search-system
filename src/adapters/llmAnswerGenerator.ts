@@ -68,49 +68,16 @@ const SYSTEM_PROMPT = `당신은 대한민국 세법 전문 검색 어시스턴�
 - 보이는 부분(head·tail)으로 명확히 답할 수 있으면 정상적으로 citations에 포함하되,
   focusHint는 반드시 마커 바깥 텍스트에서 골라야 합니다.
 
-[라벨링 규칙 — 조문 목록의 Trust Tier 기준 엄수]
-조문 목록에 표시된 (T1)·(T2)·(T3)·(T4)를 보고 라벨을 결정합니다:
-- 🟢직접근거: (T1)(법률·시행령·규칙) 또는 (T2)(부칙·경과조치) 출처만 허용. 단정형 표현 허용.
-- 🟡유사사례: (T3)(예규·훈령·고시·심판례·해석례) 또는 (T4)(판례)는 반드시 이 라벨 이하.
-  summary에서도 "유사 사례에서는 ..." 형태로만 기술. "이 케이스도 X입니다" 같은 단정형 금지.
-- ⚪참고자료: 관련 쟁점만 다루는 경우.
-- ⚫폐지: 폐지·삭제된 조문.
+[라벨링 규칙 — 라벨 값은 시스템이 Trust Tier로 자동 계산합니다 (TAX-6B-28)]
+각 citation의 label 필드는 참고용으로만 채우세요. 최종 라벨은 어댑터가 출처 Tier로
+결정론적으로 재계산하므로(TAX-6A-11) 라벨 값 자체를 오래 고민할 필요가 없습니다.
+다만 다음 두 가지는 라벨과 별개로 반드시 지키세요:
+- ⚫폐지: 조문 본문이 "삭제"된 폐지 조문이면 label에 ⚫폐지를 지정하세요(폐지 신호는 시스템이 보존).
+- summary 어조: (T3)(예규·훈령·고시·심판례·해석례)·(T4)(판례)를 근거로 쓸 때는
+  "유사 사례에서는 …" 형태로만 기술하고 "이 케이스도 X입니다" 같은 단정형은 금지합니다.
 
-⚠️ (T3) 또는 (T4) 출처에 🟢직접근거 라벨을 붙이면 검증이 FAIL됩니다.
-
-[라벨 결정 표 — Tier × 사안 적용 정도 (TAX-042D Stage 4 — V3 정확성 강화)]
-| 출처 Tier               | 질문 사안에 직접 적용 | 유사 사안·간접 적용 | 관련 쟁점만 다룸 | 폐지·삭제 조문 |
-|-------------------------|------------------------|----------------------|------------------|----------------|
-| T1·T2 (법령·시행령·부칙)| 🟢직접근거             | 🟢직접근거           | 🟢직접근거       | ⚫폐지         |
-| T3 (예규·심판례·해석례) | 🟡유사사례             | 🟡유사사례           | ⚪참고자료       | ⚫폐지         |
-| T4 (판례)               | 🟡유사사례             | 🟡유사사례           | ⚪참고자료       | ⚫폐지         |
-
-⚠️ 라벨 결정 시 절대 금지 (V3 FAIL 직결):
-- (T3)·(T4) 출처 → 🟢직접근거 금지 (위험 방향, 회계사가 판례를 법령처럼 인용해 가산세 위험).
-  반드시 🟡유사사례 또는 ⚪참고자료 중 선택하고 summary에서도 "유사 사례에서는 …" 표현 유지.
-- (T1)·(T2) 출처 → ⚪참고자료로 후퇴 금지 (안전 방향이지만 직접 근거 누락 → 회계사가 조문 못 봄).
-  반드시 🟢직접근거를 우선 사용.
-
-[라벨 결정 체크리스트 — TAX-048·TAX-051 (citation 생성 직전 반드시 수행)]
-
-Step 1: 현재 citation의 출처 Tier가 (T1) 또는 (T2)인가?
-  → YES: 🟢직접근거 / 🟡유사사례 / ⚪참고자료 / ⚫폐지 중 선택 (사안 적용 정도 기반)
-  → NO (T3 또는 T4): Step 2로 이동
-
-Step 2: 출처 Tier가 (T3) 또는 (T4)이다.
-  → 🟢직접근거 절대 금지 (예외 없음, 회계사 보호 의무)
-  → 허용 라벨: 🟡유사사례 / ⚪참고자료 / ⚫폐지 중 선택만 가능
-
-⚠️ 자주 발생하는 실수 (TAX-051 — V3 FAIL 직결):
-- 실수: "T1·T2가 없으니 T3에 🟢직접근거 부여" → V3 FAIL, E-VERIFY-FAIL 위험
-- 실수: "심판례가 사안에 정확히 일치하니 🟢" → V3 FAIL, 판례·예규·심판례는 무조건 🟡 이하
-- 실수: "예규가 법령 해석을 명확히 제시하니 🟢" → V3 FAIL, 예규는 법령이 아님
-- 올바른 처리: 검색결과 전체가 T3·T4만 있어도 모든 라벨은 🟡 또는 ⚪로 한정
-  + summary 첫 문장에 "직접 근거(법령 본문)를 찾지 못했습니다." 명시
-
-[T1·T2 부재 시 동작 규칙 — TAX-048]
+[T1·T2 부재 시 동작 규칙 — TAX-048 (회계사 보호, 반드시 준수)]
 검색된 조문 목록 전체가 (T3) 또는 (T4)만 있고 (T1)·(T2)가 하나도 없는 경우:
-- 모든 citations 라벨은 🟡유사사례 또는 ⚪참고자료만 사용 (위 Step 2 적용).
 - summary 첫 문장에 "직접 근거(법령 본문)를 찾지 못했습니다." 를 반드시 명시.
 - 단정형 표현 금지. "유사 사례에서는 …" / "참고가 될 수 있는 자료" 형태만 사용.
 - 회계사가 T3·T4 자료를 법령처럼 인용해 가산세 위험에 노출되지 않도록 보호하는 게 시스템 의무입니다.
@@ -514,6 +481,40 @@ function downgradeVectorLabels(
 }
 
 /**
+ * TAX-6B-28: "직접 근거(법령 본문)를 찾지 못했습니다" 고지를 프롬프트 의존에서 분리.
+ *
+ * 배경: TAX-048 규칙(검색 결과 전체가 T3·T4뿐이면 고지 명시)은 지금까지 SYSTEM_PROMPT
+ *   지시 + downgradeT3T4DirectCitations의 부분 보정에만 의존했다. 그런데 후자는 LLM이
+ *   T3·T4에 🟢를 잘못 붙인 경우(downgradedCount>0)에만 고지를 추가해, LLM이 처음부터
+ *   올바르게 🟡로 붙이면(정상 케이스) 고지가 코드로 보장되지 않는 빈틈이 있었다.
+ *   TAX-6B-28에서 죽은 라벨-값 프롬프트를 정리하면서, 이 고지가 프롬프트에서 옅어져도
+ *   회계사 보호(§6.3)가 흔들리지 않도록 코드 안전망으로 승격한다.
+ *
+ * 정책: 최종 citations가 있으나 T1·T2가 하나도 없으면(전부 T3·T4) 고지를 보장한다.
+ *   - matchStage='expanded'는 downgradeVectorLabels가 이미 별도 고지를 부착하므로 건너뛴다.
+ *   - 이미 "직접 근거…찾지 못했" 류 고지로 시작하면 덧붙이지 않는다(멱등).
+ *   - citations가 비면 [summary 규칙]이 별도 처리하므로 관여하지 않는다.
+ */
+export function ensureNoDirectBasisDisclosure(
+  citations: Citation[],
+  summary: string,
+  matchStage: MatchStage | undefined,
+): string {
+  if (matchStage === 'expanded') return summary
+  if (citations.length === 0) return summary
+  const hasAnyT1T2 = citations.some(
+    (c) => c.taxLaw.trustTier === 'T1' || c.taxLaw.trustTier === 'T2',
+  )
+  if (hasAnyT1T2) return summary
+
+  const prefix = '직접 근거(법령 본문)를 찾지 못했습니다.'
+  if (summary.startsWith(prefix) || summary.startsWith('직접 근거를 찾지 못했습니다')) {
+    return summary
+  }
+  return `${prefix} ${summary}`
+}
+
+/**
  * GPT-4o-mini 기반 답변 생성 Adapter (SSOT §3.3 [3]단계)
  *
  * 제공된 TaxLaw[] 원문만을 근거로 라벨링된 LabeledAnswer를 생성합니다.
@@ -620,10 +621,13 @@ export class OpenAIAnswerGeneratorAdapter implements IAnswerGeneratorPort {
         ? downgradeVectorLabels(citationsAfterUpgrade, summaryAfterV3, matchStage)
         : { citations: citationsAfterUpgrade, summary: summaryAfterV3 }
 
+      // TAX-6B-28: 전체 T3·T4(직접 근거 부재) 시 고지를 코드로 보장 (프롬프트 의존 제거).
+      const finalSummary = ensureNoDirectBasisDisclosure(citations, summary, matchStage)
+
       return {
         rawQuestion: question,
         citations,
-        summary,
+        summary: finalSummary,
         disclaimer: DISCLAIMER,
         temporalLabel: object.temporalLabel,
         verificationResult: pendingVerification(),
