@@ -4,7 +4,7 @@ import type { SearchQuery } from '../domain/SearchQuery'
 import type { SearchResult } from '../domain/SearchResult'
 import type { TaxLaw, TrustTier } from '../domain/TaxLaw'
 import { ApiTimeoutError, ApiUnavailableError } from '../domain/errors'
-import { normalizeLawName, selectBestLaw } from '../domain/lawAliases'
+import { normalizeLawName, selectBestLaw, splitLegalAxis } from '../domain/lawAliases'
 import { normalizeNonLawQuery } from '../domain/nonLawQueryNormalize'
 import { extractTerms, scoreRelevance } from '../domain/nonLawRelevance'
 
@@ -653,8 +653,13 @@ export class NationalTaxLawAdapter implements ISearchPort {
    * @param targetDate          (TAX-6A-4) 과거 시점 기준 날짜 — 조문시행일자 ≤ targetDate 필터
    */
   private async fetchArticles(keyword: string, articleNumberHint?: string, targetDate?: Date): Promise<SearchResult> {
+    // TAX-6B-24: 결합 키워드에서 법리축(법령명)만 분리해 법령명 매칭에 사용한다.
+    //  TAX-042G가 "법인세법" → "법인세법 손비"처럼 사실축을 붙이는데, 이 결합 키워드가
+    //  그대로 searchLaws·selectBestLaw에 들어가면 매칭되는 법령명이 없어 0건 또는 fallback으로
+    //  추락한다(TAX-031 정확매칭 무력화). 사실축은 조문 선별용(TAX-6B-25)이라 여기선 미사용.
+    const { legalAxis } = splitLegalAxis(keyword)
     // TAX-031: 약칭을 정식 법령명으로 정규화한 뒤 검색 (예: "상증세법" → "상속세 및 증여세법")
-    const normalized = normalizeLawName(keyword)
+    const normalized = normalizeLawName(legalAxis)
     const laws = await this.searchLaws(normalized)
     if (laws.length === 0) return { items: [], totalCount: 0 }
 

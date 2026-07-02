@@ -75,3 +75,71 @@ export function selectBestLaw<T extends { 법령명한글: string }>(
   // 4) 폴백 — 기존 동작(첫 번째) 유지하되 신호
   return { law: laws[0], matchType: 'fallback' }
 }
+
+// ─── TAX-6B-24: 법리축 분리 ──────────────────────────────────────────────────
+//
+// 배경: TAX-042G(enforceAxisCombination)가 검색어를 "법리축 + 사실축" 결합 형태로
+//   강제한다(예: "법인세법" → "법인세법 손비"). 이 결합 키워드가 그대로 법령명 검색
+//   (searchLaws)·법령 선택(selectBestLaw)에 쓰이면, "법인세법 손비"라는 법령명은 없으므로
+//   searchLaws 0건 또는 selectBestLaw fallback(laws[0] 무조건 채택)으로 추락해 TAX-031
+//   정확매칭이 무력화된다.
+//
+// 처방: 법령명 매칭 경로에는 법리축("법인세법")만 넘기고, 사실축("손비")은 분리한다.
+//   순수 함수이므로 단위 테스트로 검증한다(외부 I/O·부수효과 없음).
+//
+// 주의(§6.1 무관): 원문을 읽지 않고 검색어 문자열만 토큰 분해한다.
+
+/**
+ * splitLegalAxis 결과.
+ * - legalAxis: 법령명 검색·selectBestLaw에 사용할 법리축.
+ *   법령명 토큰을 못 찾으면 입력 전체를 그대로 담아 기존 동작을 보존한다(회귀 0건).
+ * - factAxis: 조문 선별용 사실축. 본 티켓(TAX-6B-24)에서는 소비하지 않으며,
+ *   TAX-6B-25가 필요 시 동일 함수로 재도출한다. 없으면 빈 문자열.
+ */
+export interface LegalAxisSplit {
+  legalAxis: string
+  factAxis: string
+}
+
+/** "~법" 형태 법령명 머리 토큰 (예: "법인세법", "증여세법", "조특법"). */
+const LAW_HEAD_TOKEN = /^[가-힣]+법$/
+/** 법령명 뒤에 붙는 하위 법령 토큰 (예: "법인세법 시행령"). */
+const LAW_TAIL_TOKEN = /^(시행령|시행규칙)$/
+
+/**
+ * 검색어에서 법리축(법령명)과 사실축(쟁점)을 분리한다.
+ *
+ * 규칙:
+ *  1) 공백으로 토큰화한 뒤 "~법" 패턴에 맞는 **마지막** 토큰을 법령명 끝으로 본다.
+ *     - 처음부터 그 토큰까지를 법리축으로 묶어 다단어 법령명("상속세 및 증여세법")을 보존한다.
+ *     - 바로 뒤에 "시행령"/"시행규칙"이 오면 함께 흡수한다("법인세법 시행령").
+ *  2) "~법" 토큰이 없으면(예: "접대비") 입력 전체를 legalAxis로 반환한다
+ *     → 기존 동작(searchLaws에 원본 전달)과 동일, 회귀 0건.
+ *
+ * @param keyword 검색어(결합 키워드일 수 있음)
+ */
+export function splitLegalAxis(keyword: string): LegalAxisSplit {
+  const trimmed = (keyword ?? '').trim()
+  if (!trimmed) return { legalAxis: '', factAxis: '' }
+
+  const tokens = trimmed.split(/\s+/)
+
+  // "~법" 패턴에 맞는 마지막 토큰 위치 탐색
+  let headIdx = -1
+  for (let i = 0; i < tokens.length; i++) {
+    if (LAW_HEAD_TOKEN.test(tokens[i])) headIdx = i
+  }
+
+  // 법령명 토큰이 없으면 원본 그대로 통과 (회귀 0건 보장)
+  if (headIdx === -1) return { legalAxis: trimmed, factAxis: '' }
+
+  // "시행령"/"시행규칙" 후행 토큰 흡수
+  let endIdx = headIdx
+  if (endIdx + 1 < tokens.length && LAW_TAIL_TOKEN.test(tokens[endIdx + 1])) {
+    endIdx += 1
+  }
+
+  const legalAxis = tokens.slice(0, endIdx + 1).join(' ')
+  const factAxis = tokens.slice(endIdx + 1).join(' ')
+  return { legalAxis, factAxis }
+}
