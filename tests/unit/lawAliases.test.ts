@@ -5,7 +5,7 @@
  * 순수 함수 단위로 검증한다(외부 API 비의존).
  */
 import { describe, it, expect } from 'vitest'
-import { normalizeLawName, selectBestLaw, LAW_ALIASES } from '@/domain/lawAliases'
+import { normalizeLawName, selectBestLaw, splitLegalAxis, LAW_ALIASES } from '@/domain/lawAliases'
 
 describe('normalizeLawName — 세법 약칭 정규화', () => {
   it('등록된 약칭을 정식 법령명으로 확장한다', () => {
@@ -81,5 +81,58 @@ describe('selectBestLaw — 법령명 정확매칭 선택', () => {
 
   it('빈 후보 배열이면 null을 반환한다', () => {
     expect(selectBestLaw([], '소득세법')).toBeNull()
+  })
+})
+
+describe('splitLegalAxis — 법리축/사실축 분리 (TAX-6B-24)', () => {
+  it('[핵심] 결합 키워드에서 법리축과 사실축을 분리한다', () => {
+    // TAX-042G가 만든 "법인세법 손비"를 법령명("법인세법")과 쟁점("손비")으로 분리
+    expect(splitLegalAxis('법인세법 손비')).toEqual({ legalAxis: '법인세법', factAxis: '손비' })
+  })
+
+  it('순수 법령명은 사실축 없이 그대로 반환한다(무변경)', () => {
+    expect(splitLegalAxis('소득세법')).toEqual({ legalAxis: '소득세법', factAxis: '' })
+  })
+
+  it('다단어 법령명("상속세 및 증여세법")을 통째로 법리축에 보존한다', () => {
+    expect(splitLegalAxis('상속세 및 증여세법 상속공제')).toEqual({
+      legalAxis: '상속세 및 증여세법',
+      factAxis: '상속공제',
+    })
+  })
+
+  it('"시행령"/"시행규칙" 후행 토큰을 법리축에 흡수한다', () => {
+    expect(splitLegalAxis('법인세법 시행령 접대비')).toEqual({
+      legalAxis: '법인세법 시행령',
+      factAxis: '접대비',
+    })
+    expect(splitLegalAxis('부가가치세법 시행규칙 세금계산서')).toEqual({
+      legalAxis: '부가가치세법 시행규칙',
+      factAxis: '세금계산서',
+    })
+  })
+
+  it('약칭도 "~법" 토큰으로 인식한다(정규화는 downstream normalizeLawName 담당)', () => {
+    expect(splitLegalAxis('조특법 세액공제')).toEqual({ legalAxis: '조특법', factAxis: '세액공제' })
+  })
+
+  it('법령명 토큰이 없으면 입력 전체를 legalAxis로 통과시킨다(회귀 0건)', () => {
+    // "접대비"만 검색 → 기존 동작(searchLaws에 원본 전달)과 동일
+    expect(splitLegalAxis('접대비')).toEqual({ legalAxis: '접대비', factAxis: '' })
+    expect(splitLegalAxis('접대비 손금 한도')).toEqual({ legalAxis: '접대비 손금 한도', factAxis: '' })
+  })
+
+  it('여러 사실축 토큰을 공백으로 보존한다', () => {
+    expect(splitLegalAxis('법인세법 접대비 손금 한도')).toEqual({
+      legalAxis: '법인세법',
+      factAxis: '접대비 손금 한도',
+    })
+  })
+
+  it('앞뒤 공백·빈 문자열을 안전하게 처리한다', () => {
+    expect(splitLegalAxis('  법인세법 손비  ')).toEqual({ legalAxis: '법인세법', factAxis: '손비' })
+    expect(splitLegalAxis('')).toEqual({ legalAxis: '', factAxis: '' })
+    // @ts-expect-error 방어적 입력 검증
+    expect(splitLegalAxis(undefined)).toEqual({ legalAxis: '', factAxis: '' })
   })
 })
