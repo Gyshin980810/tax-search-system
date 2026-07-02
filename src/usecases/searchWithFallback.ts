@@ -5,6 +5,7 @@ import type { SearchQuery } from '../domain/SearchQuery'
 import type { SearchResult } from '../domain/SearchResult'
 import type { TaxLaw } from '../domain/TaxLaw'
 import { identityKey, mergeSearchItems } from '../domain/searchMerge'
+import { extractTerms, scoreRelevance } from '../domain/nonLawRelevance'
 
 /**
  * 빈약 판정 임계값 — content 보유 항목이 이 수 미만이면 다음 단계로 진입 (회계사 결정 2026-05-23)
@@ -21,6 +22,44 @@ const TOP_K = 10
 /** content 보유 항목 수 카운트 */
 function contentCount(items: TaxLaw[]): number {
   return items.filter((i) => i.content.trim().length > 0).length
+}
+
+/**
+ * 빈약 판정용 유효 카운트 (TAX-6B-30, 방안 A) — content 보유 **그리고 질문 관련도가 있는**
+ * 항목만 센다.
+ *
+ * 배경(P3): 기존 contentCount는 "본문이 채워졌는가"만 봐서, 질문과 무관한 조문 3개만 있어도
+ *   THRESHOLD를 넘겨 direct로 조기 확정 → 벡터 fallback이 발동하지 못했다. 관련도(제목 2·
+ *   본문 1)가 0인 항목을 제외해 게이트를 의미 있게 만든다.
+ *
+ * 관련도는 도메인 단일 진실 원천 scoreRelevance를 재사용하며, content는 includes로 읽기만
+ * 한다(원문 무변형, §6.1). 판정 기준은 **점수 > 0**(term 1개라도 걸리면 관련).
+ *
+ * 회귀 방지: 쿼리에서 뽑은 term이 없으면(전부 불용어·1글자) 관련도를 매길 수 없으므로
+ *   기존 contentCount로 폴백한다 → 채점 불가일 때 옛 동작 보존(회귀 0).
+ *
+ * @param items  검색 결과
+ * @param terms  쿼리에서 추출한 관련도 term (extractTerms 결과의 union)
+ */
+function relevantContentCount(items: TaxLaw[], terms: string[]): number {
+  if (terms.length === 0) return contentCount(items)
+  return items.filter(
+    (i) =>
+      i.content.trim().length > 0 &&
+      scoreRelevance(`${i.lawName} ${i.articleTitle}`, i.content, terms) > 0,
+  ).length
+}
+
+/**
+ * 여러 쿼리의 키워드에서 관련도 term을 뽑아 중복 제거한 합집합을 만든다.
+ * 다중 쿼리(TAX-6B-26) 병합 결과를 하나의 관련도 기준으로 판정하기 위함이다.
+ */
+function collectQueryTerms(queries: SearchQuery[]): string[] {
+  const set = new Set<string>()
+  for (const q of queries) {
+    for (const term of extractTerms(q.keyword)) set.add(term)
+  }
+  return [...set]
 }
 
 /**
@@ -61,9 +100,12 @@ export class FallbackSearchPort implements ISearchPort {
   async searchMany(queries: SearchQuery[]): Promise<SearchResult> {
     if (queries.length === 0) return { items: [], totalCount: 0, matchStage: 'expanded' }
 
+    // 빈약 판정 관련도 term — 전 쿼리 union (TAX-6B-30). 두 게이트가 같은 기준을 공유한다.
+    const terms = collectQueryTerms(queries)
+
     // [1차] 직접 매칭 — 모든 쿼리를 direct 계층에서 병합 (방안 A)
     const directResult = await this.directSearchMany(queries)
-    if (contentCount(directResult.items) >= THRESHOLD) {
+    if (relevantContentCount(directResult.items, terms) >= THRESHOLD) {
       return { ...directResult, matchStage: 'direct' }
     }
 
@@ -78,7 +120,7 @@ export class FallbackSearchPort implements ISearchPort {
 
     const mergedItems = [...directResult.items, ...newVectorItems]
 
-    if (contentCount(mergedItems) >= THRESHOLD) {
+    if (relevantContentCount(mergedItems, terms) >= THRESHOLD) {
       return { items: mergedItems, totalCount: mergedItems.length, matchStage: 'vector' }
     }
 
