@@ -47,6 +47,29 @@ describe('lookupArticleHints — 기본 매칭', () => {
   })
 })
 
+describe('lookupArticleHints — TAX-6B-29 접대비 단독 키워드 보강', () => {
+  it('운영 로그 실제 질문("접대비 손금 인정 기준…")이 법인세법 제25조에 매칭된다', () => {
+    const result = lookupArticleHints(
+      '접대비 손금 인정 기준 알려줘. 상품권의 경우로',
+      REQUESTED_AT,
+    )
+    const hit = result.find((q) => q.keyword === '법인세법' && q.articleNumberHint === '제25조')
+    expect(hit).toBeDefined()
+  })
+
+  it('"접대비" 단독 질문도 매칭된다', () => {
+    const result = lookupArticleHints('접대비는 어떻게 처리하나요?', REQUESTED_AT)
+    const hit = result.find((q) => q.keyword === '법인세법' && q.articleNumberHint === '제25조')
+    expect(hit).toBeDefined()
+  })
+
+  it('기존 키워드(기업업무추진비 한도)는 여전히 매칭된다(무회귀)', () => {
+    const result = lookupArticleHints('기업업무추진비 한도는 얼마인가요?', REQUESTED_AT)
+    const hit = result.find((q) => q.keyword === '법인세법' && q.articleNumberHint === '제25조')
+    expect(hit).toBeDefined()
+  })
+})
+
 describe('lookupArticleHints — 다중 매칭 & 중복 제거', () => {
   it('서로 다른 조문이 매칭되면 모두 반환한다 (같은 법령 다른 조문)', () => {
     const result = lookupArticleHints(
