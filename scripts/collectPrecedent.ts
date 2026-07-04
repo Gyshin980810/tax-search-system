@@ -2,9 +2,11 @@
 /**
  * 세법 판례 주간 증분 수집기 — TAX-6B-35
  *
- * 국세법령정보시스템 DRF API(target=prec)에서 **참조법령(JO) 필터**로 세법을
- * 참고조문으로 삼는 판례만 수집해 로컬 파일(TaxLaw[])로 저장한다.
- * 임베딩·DB 적재는 하지 않는다(별도 단계 — collectTribunal.ts와 동일한 분리 설계).
+ * 국세법령정보시스템 DRF API(target=prec)에서 세법 관련 판례를 두 그물로 병행 수집해
+ * 로컬 파일(TaxLaw[])로 저장한다. 임베딩·DB 적재는 하지 않는다(별도 단계 — collectTribunal.ts와 동일).
+ *  - Pass A(JO=참조법령): 세법을 참조조문으로 삼는 판례(참조조문이 정리된 건, 주로 대법원).
+ *  - Pass B(사건명 세목 키워드 + 사건종류='세무'): 참조조문이 공란이라 JO로는 안 잡히는
+ *    하급심 세무 판례 보완(TAX-6B-35 후속, 회계사 결정 2026-07-04).
  *
  * 배경(회계사 결정 2026-07-04):
  *  - 기존 판례 10,075건의 출처(외부 저장소 precedent-kr)는 갱신이 멈춘 정적 스냅샷 —
@@ -30,6 +32,11 @@
  *   npm run collect:precedent                    → 증분 수집(첫 실행은 백필 겸용)
  *   npm run collect:precedent -- --concurrency 5
  *   npm run collect:precedent -- --max 50        → 테스트용 상한(신규 N건까지만)
+ *   npm run collect:precedent -- --all           → 검증용 전체 재수집(TAX-6B-35 후속, 회계사 요청
+ *                                                    2026-07-04): DB·원장의 "기지" 판정을 완전히
+ *                                                    건너뛰고 22개 JO 전부를 처음부터 훑는다.
+ *                                                    산출물은 scripts/precedent_full/ 에만 쓰고
+ *                                                    원장(list.json)은 갱신하지 않는다(운영 상태 무변경).
  *   npm run embed -- --input scripts/precedent_incremental_<YYYYMMDD>.json  ← 다음 단계(별도 실행)
  *
  * ⚠️ 이 스크립트는 실행 시 실제 외부 API를 호출한다. 착수 승인 전에는 실행하지 말 것.
@@ -48,6 +55,8 @@ const BASE_URL = 'https://www.law.go.kr'
 const OUT_DIR = join('scripts', 'precedent')
 /** 원장(ledger) — 이번까지 확인·수집한 목록 항목 누적(다음 실행의 기지 판정 재료) */
 const LEDGER_PATH = join(OUT_DIR, 'list.json')
+/** --all(검증용 전체 재수집) 산출물 전용 폴더 — 운영 원장·incremental 산출물과 분리 */
+const FULL_OUT_DIR = join('scripts', 'precedent_full')
 
 /** 목록 1페이지 건수 — API 최대 100 */
 const LIST_DISPLAY = 100
@@ -70,6 +79,32 @@ export const TAX_LAW_JO_BASE = [
   '지방세법',
   '지방세기본법',
   '지방세특례제한법',
+] as const
+
+/**
+ * 사건명(search=1) 세목 키워드 — JO 필터의 사각지대(참조조문 공란 하급심)를 메우는 보완 그물.
+ * 회계사 결정(2026-07-04): JO와 병행. TAX_LAW_JO_BASE(국세 8법+지방세 3법)에 대응하는 세목만
+ * 넣고, 제외 세목(관세·개별소비세·주세·증권거래세)의 키워드는 넣지 않는다.
+ * 실측 근거(TAX-6B-35 후속): JO가 못 잡은 DB 판례 2,552건의 91%가 하급심이고, 표본은
+ * 전부 참조조문 공란·사건종류='세무'였다. 사건명 검색 결과를 '세무'로 좁혀 그 층을 잡는다.
+ * (소득세 계열은 '종합소득세'·'양도소득세'·'근로소득세'가 모두 사건명에 명시돼 개별 등재)
+ */
+export const TAX_ITEM_NAME_QUERIES = [
+  '종합소득세',
+  '양도소득세',
+  '근로소득세',
+  '법인세',
+  '부가가치세',
+  '상속세',
+  '증여세',
+  '종합부동산세',
+  '취득세',
+  '재산세',
+  '등록면허세',
+  '주민세',
+  '지방소득세',
+  '자동차세',
+  '지방세', // 그 외 지방 세목 포괄
 ] as const
 
 // ─── 순수 함수 (단위 테스트 대상 — 파일시스템·네트워크 비의존) ──────────────────
@@ -133,6 +168,15 @@ export function isKnownCase(caseNumber: string, knownTokens: ReadonlySet<string>
 /** 본문 제공 여부 — 국세법령정보시스템 출처는 본문 미제공(어댑터 searchPrecedents와 동일 판정) */
 export function isCourtSource(dataSource: string): boolean {
   return (dataSource ?? '').trim() !== '국세법령정보시스템'
+}
+
+/**
+ * 사건명(search=1) 보완 그물에서 유지할 사건종류 — '세무'만.
+ * JO 그물이 이미 참조조문 태그된 판례(다수의 일반행정 포함)를 잡으므로, 여기선 사각지대인
+ * 세무 라벨 하급심만 좁혀 담아 중복·소음을 줄인다.
+ */
+export function isTargetTaxCaseType(caseType: string): boolean {
+  return (caseType ?? '').trim() === '세무'
 }
 
 /** 키(OC) 없는 공개 뷰어 링크 (어댑터 toPrecSourceUrl와 동일, §7) */
@@ -205,6 +249,21 @@ function listUrl(oc: string, jo: string, page: number): string {
   return `${BASE_URL}/DRF/lawSearch.do?${p}`
 }
 
+/** 사건명(search=1) 검색 URL — 세목 키워드 보완 그물. 실측(2026-07-04): search=1 정상 동작 */
+function nameSearchUrl(oc: string, term: string, page: number): string {
+  const p = new URLSearchParams({
+    OC: oc,
+    target: 'prec',
+    type: 'JSON',
+    display: String(LIST_DISPLAY),
+    page: String(page),
+    search: '1',   // 1=사건명 검색(본문 검색 2는 과다) — 실측 확인
+    query: term,
+    sort: 'ddes',  // 최신순 — 증분 조기 종료의 전제
+  })
+  return `${BASE_URL}/DRF/lawSearch.do?${p}`
+}
+
 function bodyUrl(oc: string, seq: string): string {
   const p = new URLSearchParams({ OC: oc, target: 'prec', ID: seq, type: 'JSON' })
   return `${BASE_URL}/DRF/lawService.do?${p}`
@@ -233,67 +292,101 @@ function getNumArg(flag: string, fallback: number): number {
 async function main(): Promise<void> {
   const concurrency = getNumArg('--concurrency', DEFAULT_CONCURRENCY)
   const max = getNumArg('--max', 0)
+  const all = process.argv.includes('--all')
   const oc = getOc()
-  const dbUrl = process.env.DATABASE_URL
-  if (!dbUrl) {
-    console.error('[collectPrecedent] DATABASE_URL 환경변수가 필요합니다(.env.local).')
-    process.exit(1)
-  }
-  const pool = new Pool({ connectionString: dbUrl, ssl: { rejectUnauthorized: false } })
-  ensureOutDir()
 
-  // 기지(旣知) 집합 = DB(precedent-kr 스냅샷 포함, 진실 소스) ∪ 원장(이전 실행 누적)
-  const ledger: PrecListItem[] = existsSync(LEDGER_PATH)
-    ? (JSON.parse(readFileSync(LEDGER_PATH, 'utf-8')) as PrecListItem[])
-    : []
+  // --all: 검증용 전체 재수집 — DB·원장 기지 판정을 완전히 건너뛴다(운영 상태 무변경, DB 불필요).
+  let pool: Pool | null = null
   const knownTokens = new Set<string>()
   const knownSeqs = new Set<string>()
-  for (const it of ledger) {
-    for (const t of normalizeCaseTokens(it.caseNumber)) knownTokens.add(t)
-    if (it.seq) knownSeqs.add(it.seq)
-  }
-  const { rows } = await withRetry(() =>
-    pool.query<{ case_number: string }>(
-      `SELECT DISTINCT case_number FROM taxlaw_embeddings WHERE source_type = '판례'`,
-    ),
-  )
-  for (const r of rows) {
-    for (const t of normalizeCaseTokens(r.case_number)) knownTokens.add(t)
-  }
-  console.log(`[증분] 기지 판례: DB ${rows.length}건 + 원장 ${ledger.length}건`)
+  let ledgerSize = 0
+  if (!all) {
+    const dbUrl = process.env.DATABASE_URL
+    if (!dbUrl) {
+      console.error('[collectPrecedent] DATABASE_URL 환경변수가 필요합니다(.env.local).')
+      process.exit(1)
+    }
+    pool = new Pool({ connectionString: dbUrl, ssl: { rejectUnauthorized: false } })
 
-  // 1) JO(참조법령)별 최신순 페이징 — 한 페이지 전체가 기지면 해당 JO 중단
+    // 기지(旣知) 집합 = DB(precedent-kr 스냅샷 포함, 진실 소스) ∪ 원장(이전 실행 누적)
+    const ledger: PrecListItem[] = existsSync(LEDGER_PATH)
+      ? (JSON.parse(readFileSync(LEDGER_PATH, 'utf-8')) as PrecListItem[])
+      : []
+    ledgerSize = ledger.length
+    for (const it of ledger) {
+      for (const t of normalizeCaseTokens(it.caseNumber)) knownTokens.add(t)
+      if (it.seq) knownSeqs.add(it.seq)
+    }
+    const { rows } = await withRetry(() =>
+      pool!.query<{ case_number: string }>(
+        `SELECT DISTINCT case_number FROM taxlaw_embeddings WHERE source_type = '판례'`,
+      ),
+    )
+    for (const r of rows) {
+      for (const t of normalizeCaseTokens(r.case_number)) knownTokens.add(t)
+    }
+    console.log(`[증분] 기지 판례: DB ${rows.length}건 + 원장 ${ledgerSize}건`)
+  } else {
+    console.log('[전체 재수집] --all — DB·원장 기지 판정을 건너뛰고 22개 JO 전부를 처음부터 훑습니다.')
+  }
+  ensureOutDir()
+  if (all && !existsSync(FULL_OUT_DIR)) mkdirSync(FULL_OUT_DIR, { recursive: true })
+
+  // 1) 두 그물을 병행해 수집(회계사 결정 2026-07-04):
+  //    Pass A(JO=참조법령): 참조조문이 정리된 판례(주로 대법원·태그된 일반행정)를 잡는다.
+  //    Pass B(사건명 세목 키워드 + 사건종류='세무'): 참조조문이 공란이라 JO로는 안 잡히는
+  //           하급심 세무 판례를 보완한다(TAX-6B-35 후속 실측: JO가 못 잡은 DB 판례 2,552건 중
+  //           91%가 하급심, 표본 전부 참조조문 공란·사건종류='세무').
   const fresh: PrecListItem[] = []
   const byCaseType = new Map<string, number>() // 사건종류 분포(통계 로그)
-  outer: for (const jo of buildJoQueries()) {
-    let page = 1
-    let totalPages = Number.POSITIVE_INFINITY
-    let joNew = 0
-    while (page <= totalPages) {
-      const parsed = parsePrecListPage(await fetchJsonWithRetry(listUrl(oc, jo, page)))
-      if (!Number.isFinite(totalPages)) {
-        totalPages = Math.max(1, Math.ceil(parsed.totalCnt / LIST_DISPLAY))
+
+  // 한 그물(질의 목록)을 최신순 페이징하며 기지/신규를 분리한다.
+  // keepCaseType: 유지할 사건종류 필터(null이면 전부 유지). 조기 종료 판정은 필터와 무관하게
+  //   "페이지 전체가 기지인가(pageUnknown 0건)"로만 한다 — 필터로 걸러진 신규가 조기 종료를
+  //   잘못 유발하지 않도록. 반환값 true = --max 상한 도달(바깥 패스까지 중단).
+  async function pageThrough(
+    label: string,
+    queries: readonly string[],
+    urlOf: (q: string, page: number) => string,
+    keepCaseType: ((caseType: string) => boolean) | null,
+  ): Promise<boolean> {
+    for (const q of queries) {
+      let page = 1
+      let totalPages = Number.POSITIVE_INFINITY
+      let qNew = 0
+      while (page <= totalPages) {
+        const parsed = parsePrecListPage(await fetchJsonWithRetry(urlOf(q, page)))
+        if (!Number.isFinite(totalPages)) {
+          totalPages = Math.max(1, Math.ceil(parsed.totalCnt / LIST_DISPLAY))
+        }
+        const pageUnknown = parsed.items.filter(
+          (it) => it.seq && !knownSeqs.has(it.seq) && !isKnownCase(it.caseNumber, knownTokens),
+        )
+        const pageKeep = keepCaseType ? pageUnknown.filter((it) => keepCaseType(it.caseType)) : pageUnknown
+        for (const it of pageKeep) {
+          fresh.push(it)
+          qNew++
+          knownSeqs.add(it.seq) // 질의 간·페이지 간 교차 중복 방어
+          for (const t of normalizeCaseTokens(it.caseNumber)) knownTokens.add(t)
+          byCaseType.set(it.caseType || '(미상)', (byCaseType.get(it.caseType || '(미상)') ?? 0) + 1)
+        }
+        if (pageUnknown.length === 0) break // 페이지 전체가 기지 — 이후는 더 오래된 데이터
+        if (max > 0 && fresh.length >= max) return true
+        page++
       }
-      const pageFresh = parsed.items.filter(
-        (it) => it.seq && !knownSeqs.has(it.seq) && !isKnownCase(it.caseNumber, knownTokens),
-      )
-      for (const it of pageFresh) {
-        fresh.push(it)
-        joNew++
-        knownSeqs.add(it.seq) // JO 간·페이지 간 교차 중복 방어
-        for (const t of normalizeCaseTokens(it.caseNumber)) knownTokens.add(t)
-        byCaseType.set(it.caseType || '(미상)', (byCaseType.get(it.caseType || '(미상)') ?? 0) + 1)
-      }
-      if (pageFresh.length === 0) break // 전체 기지 — 이후는 더 오래된 데이터
-      if (max > 0 && fresh.length >= max) break outer
-      page++
+      console.log(`[${label}] "${q}": 신규 ${qNew}건 (누적 ${fresh.length})`)
     }
-    console.log(`[증분] JO=${jo}: 신규 ${joNew}건 (누적 ${fresh.length})`)
+    return false
+  }
+
+  const capped = await pageThrough('JO', buildJoQueries(), (q, p) => listUrl(oc, q, p), null)
+  if (!capped) {
+    await pageThrough('사건명', TAX_ITEM_NAME_QUERIES, (q, p) => nameSearchUrl(oc, q, p), isTargetTaxCaseType)
   }
 
   if (fresh.length === 0) {
     console.log('[증분] 신규 판례 없음 — 산출물 없이 종료합니다.')
-    await pool.end()
+    if (pool) await pool.end()
     return
   }
   const typeStat = [...byCaseType.entries()].map(([k, v]) => `${k} ${v}`).join(' · ')
@@ -327,21 +420,33 @@ async function main(): Promise<void> {
       (b.decisionDate ?? '').localeCompare(a.decisionDate ?? '') ||
       (a.caseNumber ?? '').localeCompare(b.caseNumber ?? ''),
   )
-  const outPath = join('scripts', `precedent_incremental_${todayStamp()}.json`)
+  const outPath = all
+    ? join(FULL_OUT_DIR, `precedent_full_${todayStamp()}.json`)
+    : join('scripts', `precedent_incremental_${todayStamp()}.json`)
   writeFileSync(outPath, JSON.stringify(laws, null, 2) + '\n', 'utf-8')
 
   // 4) 원장 갱신 — 성공 항목만 추가(실패분은 다음 실행에서 자동 재수집).
-  //    --max(테스트 상한) 실행은 원장을 갱신하지 않는다 — 산출물을 임베딩하지 않고 버릴 수
-  //    있는데 원장에만 기록되면 해당 건이 영구 누락되기 때문.
-  if (max === 0) {
-    writeFileSync(LEDGER_PATH, JSON.stringify([...ledger, ...succeeded], null, 2) + '\n', 'utf-8')
-  } else {
-    console.log('[증분] --max 테스트 실행 — 원장(list.json)은 갱신하지 않습니다.')
+  //    --all(검증용 전체 재수집)·--max(테스트 상한) 실행은 원장을 갱신하지 않는다.
+  //    --all은 운영 상태를 건드리지 않기 위함, --max는 임베딩하지 않고 버릴 산출물이
+  //    원장에만 기록되면 해당 건이 영구 누락되기 때문.
+  if (!all && pool) {
+    if (max === 0) {
+      const ledger: PrecListItem[] = existsSync(LEDGER_PATH)
+        ? (JSON.parse(readFileSync(LEDGER_PATH, 'utf-8')) as PrecListItem[])
+        : []
+      writeFileSync(LEDGER_PATH, JSON.stringify([...ledger, ...succeeded], null, 2) + '\n', 'utf-8')
+    } else {
+      console.log('[증분] --max 테스트 실행 — 원장(list.json)은 갱신하지 않습니다.')
+    }
+  } else if (all) {
+    console.log('[전체 재수집] --all — 원장(list.json)은 갱신하지 않습니다(운영 상태 무변경).')
   }
 
-  await pool.end()
+  if (pool) await pool.end()
   console.log(`[증분] 완료: 신규 ${laws.length}건 → ${outPath} (본문 성공 ${ok}·빈본문 ${empty}·실패 ${fail})`)
-  console.log(`다음 단계(별도 실행): npm run embed -- --input ${outPath.replace(/\\/g, '/')}`)
+  if (!all) {
+    console.log(`다음 단계(별도 실행): npm run embed -- --input ${outPath.replace(/\\/g, '/')}`)
+  }
 }
 
 // vitest import 시 main() 미실행(순수 함수만 노출) — collectTribunal.ts와 동일 가드

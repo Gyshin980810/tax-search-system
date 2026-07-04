@@ -11,11 +11,13 @@
 import { describe, it, expect } from 'vitest'
 import {
   TAX_LAW_JO_BASE,
+  TAX_ITEM_NAME_QUERIES,
   buildJoQueries,
   parsePrecListPage,
   normalizeCaseTokens,
   isKnownCase,
   isCourtSource,
+  isTargetTaxCaseType,
   toPrecSourceUrl,
   parsePrecBody,
   mapPrecedentToTaxLaw,
@@ -76,6 +78,32 @@ describe('collectPrecedent (TAX-6B-35 판례 증분 수집기 순수 함수)', (
       expect(queries).toContain('법인세법')
       expect(queries).toContain('법인세법 시행령')
       expect(queries).toContain('지방세특례제한법 시행령')
+    })
+  })
+
+  describe('TAX_ITEM_NAME_QUERIES (사건명 보완 그물 — JO 사각지대 하급심 세무 판례)', () => {
+    it('JO 목록(11법)에 대응하는 세목 키워드를 포함한다', () => {
+      expect(TAX_ITEM_NAME_QUERIES).toContain('법인세')
+      expect(TAX_ITEM_NAME_QUERIES).toContain('양도소득세')
+      expect(TAX_ITEM_NAME_QUERIES).toContain('상속세')
+      expect(TAX_ITEM_NAME_QUERIES).toContain('증여세')
+      expect(TAX_ITEM_NAME_QUERIES).toContain('취득세')
+      expect(TAX_ITEM_NAME_QUERIES).toContain('종합부동산세')
+    })
+    it('제외 세목(관세·개별소비세·주세·증권거래세) 키워드는 넣지 않는다', () => {
+      for (const excluded of ['관세', '개별소비세', '주세', '증권거래세']) {
+        expect(TAX_ITEM_NAME_QUERIES).not.toContain(excluded)
+      }
+    })
+  })
+
+  describe('isTargetTaxCaseType (사건명 그물에서 사건종류=세무만 유지)', () => {
+    it("'세무'만 true, 그 외 사건종류는 false로 판정한다", () => {
+      expect(isTargetTaxCaseType('세무')).toBe(true)
+      expect(isTargetTaxCaseType(' 세무 ')).toBe(true) // 공백 허용
+      expect(isTargetTaxCaseType('일반행정')).toBe(false)
+      expect(isTargetTaxCaseType('민사')).toBe(false)
+      expect(isTargetTaxCaseType('')).toBe(false)
     })
   })
 
