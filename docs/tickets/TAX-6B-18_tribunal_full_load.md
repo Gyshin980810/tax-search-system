@@ -196,13 +196,13 @@
 
 ## 5. Acceptance Criteria (완료 조건)
 
-1. [ ] 심판례 약 139,791건이 pgvector에 적재(차원 1024, 사건번호 unique).
-2. [ ] 적재 본문이 원문과 **문자 단위 일치**(§6.1, 샘플 대조).
-3. [ ] 수집기가 중단 후 **체크포인트로 재개** 가능.
-4. [ ] 질의 시 심판례 참고 목록이 벡터 의미 검색으로 생성됨(제목 미일치 쟁점도 후보 진입).
-5. [ ] 키(OC)·개인정보가 로그·산출물·UI에 노출되지 않음(§7).
-6. [ ] law-verifier V1~V6 회귀 통과, 기존 vitest 그린.
-7. [ ] P95 회귀 없음(벡터 검색이 실시간 API보다 느리지 않음 확인).
+1. [x] 심판례 약 139,791건이 pgvector에 적재(차원 1024, 사건번호 unique) — 실제 135,810건(3,981건은 원본 자체 content 중복, 정상 dedup. `docs/reports/TAX-6B-18_report.md` 참고).
+2. [x] 적재 본문이 원문과 **문자 단위 일치**(§6.1, 샘플 대조) — 무작위 8건 100% 일치.
+3. [x] 수집기가 중단 후 **체크포인트로 재개** 가능 — 실제 5회 재시작(수동 2·크래시 2·코드적용 1)에도 데이터 손실 0.
+4. [x] 질의 시 심판례 참고 목록이 벡터 의미 검색으로 생성됨(제목 미일치 쟁점도 후보 진입) — `generateAnswer.ts` `fetchVectorReferences`를 판례·심판례 공용으로 일반화(병렬 실행), 실제 DB 스모크 테스트로 의미 매칭 확인(2026-07-04).
+5. [x] 키(OC)·개인정보가 로그·산출물·UI에 노출되지 않음(§7).
+6. [x] law-verifier V1~V6 회귀 통과, 기존 vitest 그린 — 694/694 PASS.
+7. [ ] P95 회귀 없음 — ⚠️ 미측정. pgvector에 ANN 인덱스(HNSW) 미적용 상태로 단일 벡터 질의 실측 약 3.17초(전수 스캔, 135K+행) 확인. 병렬화로 게이트 2개(판례·심판례)가 직렬로 겹치지 않게는 했으나, 실제 답변 파이프라인 전체 P95 재측정은 아직 하지 않음 — 후속 확인 필요.
 
 ---
 
@@ -242,7 +242,7 @@
 ### 8.2 코딩 후 제출할 것
 - [ ] 변경 파일 목록 / 변경 요약 / 검증 PASS·FAIL
 - [x] 수집기 부분 구현 리포트: `docs/reports/TAX-6B-18A_report.md`
-- [ ] 전량 적재·검색 전환 리포트: `docs/reports/TAX-6B-18_report.md`
+- [x] 전량 적재·검색 전환 리포트: `docs/reports/TAX-6B-18_report.md`
 
 ---
 
@@ -267,16 +267,16 @@
 
 ## 11. Report Link
 
-Report: `docs/reports/TAX-6B-18A_report.md` (작성 완료 — 수집기 부분 구현 리포트) / `docs/reports/TAX-6B-18_report.md` (미작성 — 전량 적재·검색 전환 착수 보류)
+Report: `docs/reports/TAX-6B-18A_report.md` (작성 완료 — 수집기 부분 구현 리포트) / `docs/reports/TAX-6B-18_report.md` (작성 완료 — 전량 적재·검색 전환 실행 리포트)
 
 ---
 
 **작성자**: AI (Claude) — 회계사 지시로 설계 보관
 **작성일**: 2026-06-19
-**최종 수정일**: 2026-06-21
-**상태**: 🟡 전체 보류 — 단, **§4[2] 수집기 코드는 부분 구현 완료(미실행)**.
-  - 구현: `scripts/collectTribunal.ts`, `tests/unit/collectTribunal.test.ts`, `package.json`(collect:tribunal), `.gitignore`(산출물 제외).
-  - 추가 안전장치: finalize 단계 `caseNumber` 중복·누락 품질 게이트.
-  - 공통 적재 안전장치: `scripts/embedQuality.ts`, `tests/unit/embedQuality.test.ts`, `scripts/embed.ts`의 비법령 caseNumber 품질 게이트.
-  - 검색 경로 선행 배선: `generateAnswer.buildReferences`에서 판례·심판례 sourceType별 벡터 참고자료 후보 병합 가능.
-  - typecheck PASS. **실제 수집(API 호출)·임베딩은 회계사 승인 후 실행** — 착수 전 게이트: §3.3 저장소 결정 + §4[1] 스키마.
+**최종 수정일**: 2026-07-04
+**상태**: ✅ **[2] 수집 + [3] 임베딩·적재 + [4] 검색 경로 전환 모두 실행 완료** (2026-07-03 밤 ~ 2026-07-04). P95 재측정만 잔여(§5 AC7).
+  - 수집: `scripts/collectTribunal.ts` 실제 실행 완료(139,840건, checkpoint fail 0).
+  - 적재: `scripts/embed.ts` 실제 임베딩·pgvector 적재 완료(135,810건, voyage-4/-4-large 혼재+metadata 추적, withRetry 안정화 추가). 상세: `docs/reports/TAX-6B-18_report.md`.
+  - 검색 경로 전환: `generateAnswer.ts`의 `fetchPrecedentReferences`를 `fetchVectorReferences`로 일반화해 판례·심판례를 `VECTOR_REFERENCE_GATES` 배열로 병렬 검색(`tests/unit/tribunalReferences.test.ts` 신규 6건). 실시간 `searchTribunal` 경로는 폴백으로 그대로 보존. 실 DB 스모크 테스트로 의미 매칭 확인.
+  - typecheck 0 / vitest 694/694 PASS.
+  - **잔여**: P95 재측정(§5 AC7) — pgvector ANN 인덱스(HNSW) 미적용으로 벡터 질의 단건 약 3.17초 관측.

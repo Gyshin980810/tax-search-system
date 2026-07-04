@@ -8,12 +8,16 @@ import type { IEmbeddingPort } from '../ports/embeddingPort'
 const OPENAI_EMBEDDING_MODEL = 'text-embedding-3-small'
 
 /**
- * voyage-4 — 한국어 검색 정확도가 OpenAI 대비 우수(법률·다국어 도메인 강점, TAX-6B-15).
- * outputDimension=1024로 고정(voyage-4는 1536 미지원, 256/512/1024/2048 중 선택).
+ * voyage-4 계열 — 한국어 검색 정확도가 OpenAI 대비 우수(법률·다국어 도메인 강점, TAX-6B-15).
+ * outputDimension=1024로 고정(voyage-4 계열 공통 지원, 256/512/1024/2048 중 선택).
  * 1024는 마트료시카(MRL) 구조라 2048 정확도의 98%+ 유지하면서 저장·속도 효율이 좋다.
  * ⚠️ 이 차원은 DB 스키마 vector(1024)와 반드시 일치해야 함(scripts/migrate.sql).
+ *
+ * voyage-4/-4-lite/-4-large는 같은 임베딩 공간을 공유(호환 O)하지만 무료 토큰(2억)은
+ * 모델별로 별도 소진된다. 무료 한도 소진 시 이 상수만 바꿔 다른 계열 모델로 전환한다.
+ * 어느 레코드가 어떤 모델로 임베딩됐는지는 embed.ts가 metadata 컬럼에 기록한다.
  */
-const VOYAGE_EMBEDDING_MODEL = 'voyage-4'
+export const VOYAGE_EMBEDDING_MODEL = 'voyage-4-large'
 const VOYAGE_OUTPUT_DIMENSION = 1024
 
 /**

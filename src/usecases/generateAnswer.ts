@@ -53,17 +53,19 @@ const MIN_RELEVANCE_SCORE = 1
 const SEMANTIC_RERANK_LIMIT = 20
 
 /**
- * 판례 코퍼스(pgvector) 라이브 배선 상수 (TAX-6B-14).
- * pgvector에 적재된 대법원 판례(T4)를 질문 의미검색으로 참고 목록에 합류시킬 때의 보수적 게이트.
- *  - PRECEDENT_TOP_K: 벡터DB에서 일단 끌어올 판례 후보 수.
- *  - PRECEDENT_MIN_SIMILARITY: 이 cosine 유사도 미만은 무관으로 보고 제외(보수적 바닥).
- *  - PRECEDENT_MAX: 게이트 통과분 중 최종 노출 상한(노이즈 위험을 소수로 가둠).
+ * 벡터 코퍼스(pgvector) 라이브 배선 상수 (TAX-6B-14 판례 → TAX-6B-18 심판례로 일반화).
+ * pgvector에 적재된 판례(T4)·심판례(T3)를 질문 의미검색으로 참고 목록에 합류시킬 때의 보수적 게이트.
+ *  - topK: 벡터DB에서 일단 끌어올 후보 수.
+ *  - minSimilarity: 이 cosine 유사도 미만은 무관으로 보고 제외(보수적 바닥).
+ *  - max: 게이트 통과분 중 최종 노출 상한(노이즈 위험을 소수로 가둠).
  * PoC(TAX-6B-13) 실측 기준 초기값이며, 노이즈(0.42)·진짜이득(0.38) 역전 사례가 있어
- * 바닥만으로 완전 분리는 불가 → 상한 소수 + ⚪T4 라벨로 위험을 제한한다.
+ * 바닥만으로 완전 분리는 불가 → 상한 소수 + 라벨(⚪T4·🟡T3)로 위험을 제한한다.
+ * 심판례는 판례와 동일 게이트를 적용한다(티켓 TAX-6B-18 §4[4] 결정 — 노이즈 억제 우선).
  */
-const PRECEDENT_TOP_K = 5
-const PRECEDENT_MIN_SIMILARITY = 0.5
-const PRECEDENT_MAX = 2
+const VECTOR_REFERENCE_GATES: { sourceType: '판례' | '심판례'; topK: number; minSimilarity: number; max: number }[] = [
+  { sourceType: '판례', topK: 5, minSimilarity: 0.5, max: 2 },
+  { sourceType: '심판례', topK: 5, minSimilarity: 0.5, max: 2 },
+]
 
 /**
  * 참고자료(TaxLaw)의 관련도 점수 — 사건명·명칭(제목)과 본문(content)을 함께 평가한다 (TAX-015C → TAX-6B-10).
@@ -146,14 +148,19 @@ async function buildReferences(
   //  관련도 MIN_RELEVANCE_SCORE 미만(무관) 자료는 제외. 전부 무관하면 외부 후보는 비게 된다.
   const externalFiltered = scored.filter((s) => s.score >= MIN_RELEVANCE_SCORE)
 
-  // [4] 판례 코퍼스(pgvector) 라이브 검색 (TAX-6B-14).
-  //  같은 질문 벡터로 판례만 의미검색 → 보수적 게이트(유사도 바닥 + 상위 N건) 통과분만.
+  // [4] 판례·심판례 코퍼스(pgvector) 라이브 검색 (TAX-6B-14 → TAX-6B-18 일반화).
+  //  같은 질문 벡터로 각 sourceType을 의미검색 → 보수적 게이트(유사도 바닥 + 상위 N건) 통과분만.
   //  이미 외부 후보·인용에 있는 사건번호는 제외해 중복 노출을 막는다.
+  //  게이트끼리는 sourceType이 identityKey에 포함돼 원천적으로 겹칠 수 없으므로 병렬 실행한다
+  //  (순차 실행 시 벡터 DB 왕복이 게이트 수만큼 직렬로 쌓여 P95를 해친다).
   const excludeKeys = new Set([...citedKeys, ...externalFiltered.map((s) => identityKey(s.ref))])
-  const precedentScored = await fetchPrecedentReferences(queryVec, vectorSearchPort, excludeKeys)
+  const vectorPicks = await Promise.all(
+    VECTOR_REFERENCE_GATES.map((gate) => fetchVectorReferences(queryVec, vectorSearchPort, excludeKeys, gate)),
+  )
+  const vectorScored = vectorPicks.flat()
 
   // [5] 병합 → 정렬 → 상한.
-  const merged = [...externalFiltered, ...precedentScored].sort((a, b) => {
+  const merged = [...externalFiltered, ...vectorScored].sort((a, b) => {
     if (a.score !== b.score) return b.score - a.score
     const byDate = (b.ref.decisionDate ?? '').localeCompare(a.ref.decisionDate ?? '')
     if (byDate !== 0) return byDate
@@ -164,29 +171,32 @@ async function buildReferences(
 }
 
 /**
- * 판례 코퍼스(pgvector)에서 질문과 의미가 가까운 판례를 가져온다 (TAX-6B-14 라이브 배선).
+ * 판례·심판례 코퍼스(pgvector)에서 질문과 의미가 가까운 자료를 가져온다
+ * (TAX-6B-14 판례 라이브 배선 → TAX-6B-18 심판례로 일반화).
  *
  * - queryVec(질문 벡터)는 의미 재정렬에서 이미 만든 것을 재사용한다 — 추가 임베딩 콜 0.
- * - 보수적 2단 게이트: 유사도 PRECEDENT_MIN_SIMILARITY 이상만 남기고 → 상위 PRECEDENT_MAX건.
+ * - 보수적 2단 게이트: 유사도 gate.minSimilarity 이상만 남기고 → 상위 gate.max건.
  * - 이미 노출 예정인 자료(excludeKeys)는 사건번호로 중복 제거.
  * - vectorSearchPort/queryVec 미주입 또는 검색 실패 시 빈 배열(graceful degrade) — 기존 동작 회귀 없음.
- * - 판례는 ⚪T4 참고자료로만 노출되며 발췌(excerpt) 인용으로 승격되지 않는다(§6.4 V검증 비대상).
+ * - 판례(T4)는 ⚪, 심판례(T3)는 🟡(사안 일치 시 🟢 가능) 참고자료로 노출되며
+ *   둘 다 발췌(excerpt) 인용으로 승격되지 않는다(§6.4 V검증 비대상, 참고 목록은 인용 아님).
  *   점수는 외부 후보와 같은 척도로 정렬하기 위해 combinedScore(글자 0, 유사도)로 환산한다.
  */
-async function fetchPrecedentReferences(
+async function fetchVectorReferences(
   queryVec: number[] | undefined,
   vectorSearchPort: IVectorSearchPort | undefined,
   excludeKeys: Set<string>,
+  gate: { sourceType: '판례' | '심판례'; topK: number; minSimilarity: number; max: number },
 ): Promise<{ ref: TaxLaw; score: number }[]> {
   if (!vectorSearchPort || !queryVec) return []
   try {
-    const matches = await vectorSearchPort.searchSimilar(queryVec, PRECEDENT_TOP_K, '판례')
+    const matches = await vectorSearchPort.searchSimilar(queryVec, gate.topK, gate.sourceType)
     return matches
-      .filter((m) => m.similarity >= PRECEDENT_MIN_SIMILARITY && !excludeKeys.has(identityKey(m.item)))
-      .slice(0, PRECEDENT_MAX)
+      .filter((m) => m.similarity >= gate.minSimilarity && !excludeKeys.has(identityKey(m.item)))
+      .slice(0, gate.max)
       .map((m) => ({ ref: m.item, score: combinedScore(0, m.similarity) }))
   } catch {
-    // 벡터 검색 실패 — 판례 경로만 조용히 건너뛴다. 외부 API 참고 목록은 그대로 구성된다.
+    // 벡터 검색 실패 — 해당 sourceType 경로만 조용히 건너뛴다. 외부 API 참고 목록은 그대로 구성된다.
     return []
   }
 }

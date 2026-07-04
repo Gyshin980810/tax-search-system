@@ -75,9 +75,17 @@ function makeEmbedStub(): IEmbeddingPort {
   }
 }
 
-/** 벡터 검색 스텁 — 주어진 matches를 그대로 반환(searchSimilar 호출 인자 검증용 vi.fn). */
+/**
+ * 벡터 검색 스텁 — 주어진 matches 중 요청된 sourceType과 일치하는 것만 반환한다.
+ * 실제 PgVectorSearchAdapter(`WHERE source_type = $3`)와 동일하게 sourceType으로 필터링해야
+ * TAX-6B-18 이후 판례·심판례 두 게이트가 같은 스텁을 공유할 때 서로 섞이지 않는다.
+ */
 function makeVectorStub(matches: VectorMatch[]): IVectorSearchPort {
-  return { searchSimilar: vi.fn(async () => matches) }
+  return {
+    searchSimilar: vi.fn(async (_vec: number[], _topK: number, sourceType?: string) =>
+      sourceType ? matches.filter((m) => m.item.sourceType === sourceType) : matches,
+    ),
+  }
 }
 
 function makeStubs(items: TaxLaw[], keyword: string) {
