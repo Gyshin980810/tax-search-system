@@ -16,6 +16,7 @@ import {
   parseBody,
   mapTribunalToTaxLaw,
   findDuplicateCaseNumbers,
+  splitKnownNew,
   type TribunalListItem,
 } from '../../scripts/collectTribunal'
 
@@ -204,6 +205,58 @@ describe('collectTribunal (TAX-6B-18 심판례 수집기 순수 함수)', () => 
         mapTribunalToTaxLaw({ ...baseItem, seq: '402', caseNumber: '' }, '본문 B'),
       ]
       expect(findDuplicateCaseNumbers(laws)).toEqual([])
+    })
+  })
+
+  describe('splitKnownNew (TAX-6B-34 증분 수집 조기 종료 판정)', () => {
+    const mk = (seq: string, caseNumber: string): TribunalListItem => ({
+      seq,
+      caseNumber,
+      caseName: '사건명',
+      decidedAt: '2026.07.01',
+      agency: '조세심판원',
+    })
+    const emptySets = { caseNumbers: new Set<string>(), seqs: new Set<string>() }
+
+    it('기지 caseNumber는 제외하고 신규만 남긴다', () => {
+      const items = [mk('1', '조심 2026부0001'), mk('2', '조심 2026부0002')]
+      const { fresh, knownCount } = splitKnownNew(items, {
+        caseNumbers: new Set(['조심 2026부0001']),
+        seqs: new Set<string>(),
+      })
+      expect(fresh.map((it) => it.seq)).toEqual(['2'])
+      expect(knownCount).toBe(1)
+    })
+
+    it('페이지 전체가 기지면 fresh가 비어 조기 종료 조건이 된다', () => {
+      const items = [mk('1', '조심 2026부0001'), mk('2', '조심 2026부0002')]
+      const { fresh, knownCount } = splitKnownNew(items, {
+        caseNumbers: new Set(['조심 2026부0001', '조심 2026부0002']),
+        seqs: new Set<string>(),
+      })
+      expect(fresh).toEqual([])
+      expect(knownCount).toBe(2)
+    })
+
+    it('seq 기지(원장에 이미 수집됨)도 제외한다 — 병합 사건번호 자가 치유 경로', () => {
+      const items = [mk('1', '조심 2026부0001')]
+      const { fresh } = splitKnownNew(items, {
+        caseNumbers: new Set<string>(),
+        seqs: new Set(['1']),
+      })
+      expect(fresh).toEqual([])
+    })
+
+    it('caseNumber 누락 항목은 seq로만 대조해 신규로 유지한다(놓침 방지)', () => {
+      const items = [mk('1', '')]
+      expect(splitKnownNew(items, emptySets).fresh).toHaveLength(1)
+    })
+
+    it('seq 누락 항목은 본문 조회 불가이므로 기지로 취급한다', () => {
+      const items = [mk('', '조심 2026부0001')]
+      const { fresh, knownCount } = splitKnownNew(items, emptySets)
+      expect(fresh).toEqual([])
+      expect(knownCount).toBe(1)
     })
   })
 })

@@ -35,6 +35,13 @@
  *   npm run collect:tribunal -- --allow-duplicate-case
  *     → 사건번호 중복 리포트만 남기고 finalize 강행(기본값은 중복 발견 시 중단)
  *
+ * ── 증분 수집(--incremental, TAX-6B-34 — 회계사 결정: 수동 실행·매주 1회) ──────
+ *   npm run collect:tribunal -- --incremental
+ *     → sort=ddes 최신 페이지부터, 원장(list.json)+DB(case_number) 대조로 기지(旣知) 판정.
+ *       한 페이지 전체가 기지면 중단(이후는 전부 더 오래된 데이터).
+ *     → 신규 건만 scripts/tribunal_incremental_<YYYYMMDD>.json 에 기록.
+ *   npm run embed -- --input scripts/tribunal_incremental_<YYYYMMDD>.json  ← 다음 단계(별도 실행)
+ *
  * ⚠️ 이 스크립트는 실행 시 실제 외부 API를 호출한다. 착수 승인 전에는 실행하지 말 것.
  */
 import {
@@ -46,7 +53,9 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { Pool } from 'pg'
 import type { TaxLaw } from '../src/domain/TaxLaw'
+import { withRetry } from './embed'
 
 // ─── 경로·상수 ────────────────────────────────────────────────────────────────
 
@@ -186,6 +195,31 @@ export function findDuplicateCaseNumbers(laws: TaxLaw[]): DuplicateCaseNumber[] 
     .sort((a, b) => a.caseNumber.localeCompare(b.caseNumber))
 }
 
+/** 증분 수집의 기지(旣知) 판정 재료 — caseNumber(원장+DB)와 seq(원장) 두 축으로 대조 */
+export interface KnownSets {
+  caseNumbers: ReadonlySet<string>
+  seqs: ReadonlySet<string>
+}
+
+/**
+ * 증분 수집(--incremental): 목록 페이지 항목을 기지/신규로 분리한다 (TAX-6B-34).
+ * 신규 0건(페이지 전체 기지)이면 이후 페이지는 전부 더 오래된 데이터이므로 페이징을 중단한다.
+ * - seq 누락 항목은 본문 조회가 불가하므로 기지로 취급(수집 대상 아님).
+ * - caseNumber 누락 항목은 seq로만 대조(누락을 이유로 놓치지 않음).
+ */
+export function splitKnownNew(
+  items: TribunalListItem[],
+  known: KnownSets,
+): { fresh: TribunalListItem[]; knownCount: number } {
+  const fresh = items.filter(
+    (it) =>
+      it.seq &&
+      !known.seqs.has(it.seq) &&
+      !(it.caseNumber && known.caseNumbers.has(it.caseNumber)),
+  )
+  return { fresh, knownCount: items.length - fresh.length }
+}
+
 // ─── I/O 유틸 (네트워크·파일) ──────────────────────────────────────────────────
 
 function getOc(): string {
@@ -215,8 +249,8 @@ function bodyUrl(oc: string, seq: string): string {
   return `${BASE_URL}/DRF/lawService.do?${p}`
 }
 
-/** 타임아웃 + 지수 백오프 재시도. 실패 로그의 URL은 OC 마스킹(§7). */
-async function fetchJsonWithRetry(url: string): Promise<unknown> {
+/** 타임아웃 + 지수 백오프 재시도. 실패 로그의 URL은 OC 마스킹(§7). collectPrecedent.ts에서 재사용. */
+export async function fetchJsonWithRetry(url: string): Promise<unknown> {
   let lastErr: unknown
   for (let attempt = 0; attempt <= MAX_RETRY; attempt++) {
     try {
@@ -243,8 +277,8 @@ async function fetchJsonWithRetry(url: string): Promise<unknown> {
   throw new Error(`재시도 ${MAX_RETRY}회 초과: ${scrubOc(String(lastErr))}`)
 }
 
-/** 동시성 제한 풀 — items를 worker로 limit개씩 병렬 처리 */
-async function runPool<T>(items: T[], limit: number, worker: (item: T, idx: number) => Promise<void>): Promise<void> {
+/** 동시성 제한 풀 — items를 worker로 limit개씩 병렬 처리. collectPrecedent.ts에서 재사용. */
+export async function runPool<T>(items: T[], limit: number, worker: (item: T, idx: number) => Promise<void>): Promise<void> {
   let next = 0
   async function loop(): Promise<void> {
     while (next < items.length) {
@@ -410,6 +444,128 @@ function finalize(allowDuplicateCase = false): void {
   console.log(`다음 단계(추후, 별도 실행): npm run embed -- --input ${FINAL_PATH.replace(/\\/g, '/')}`)
 }
 
+// ─── 증분 수집 (--incremental, TAX-6B-34) ─────────────────────────────────────
+
+/** 오늘 날짜 스탬프(YYYYMMDD) — 증분 산출물 파일명용 */
+function todayStamp(): string {
+  const d = new Date()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}${mm}${dd}`
+}
+
+/**
+ * 주간 증분 수집: 최신순 목록을 원장(list.json)+DB와 대조해 신규 건만 본문 수집.
+ *
+ * 기지(旣知) 판정을 DB 단독이 아닌 "원장 ∪ DB"로 하는 이유:
+ *  content_hash dedup으로 DB에 전용 행이 없는 병합 사건번호 3,981건(TAX-6B-18 §발견)이
+ *  DB 대조만으로는 매주 "신규"로 오인돼, 페이지 전체 기지 시 중단하는 조기 종료가
+ *  사실상 무력화되기 때문(전 페이지의 94%에 1건 이상 산재). 원장이 이를 흡수하고,
+ *  이번 실행의 성공 항목을 원장에 추가해 다음 실행부터 자가 치유된다.
+ */
+async function collectIncremental(oc: string, concurrency: number, max: number): Promise<void> {
+  const dbUrl = process.env.DATABASE_URL
+  if (!dbUrl) {
+    console.error('[collectTribunal] --incremental 은 DATABASE_URL 환경변수가 필요합니다(.env.local).')
+    process.exit(1)
+  }
+  const pool = new Pool({ connectionString: dbUrl, ssl: { rejectUnauthorized: false } })
+
+  const ledger: TribunalListItem[] = existsSync(LIST_PATH)
+    ? (JSON.parse(readFileSync(LIST_PATH, 'utf-8')) as TribunalListItem[])
+    : []
+  const knownCaseNumbers = new Set<string>()
+  const knownSeqs = new Set<string>()
+  for (const it of ledger) {
+    if (it.caseNumber) knownCaseNumbers.add(it.caseNumber)
+    if (it.seq) knownSeqs.add(it.seq)
+  }
+  console.log(`[증분] 원장 ${ledger.length}건 로드 (${LIST_PATH})`)
+
+  // 1) 최신순(sort=ddes) 페이징 — 한 페이지 전체가 기지면 중단
+  const fresh: TribunalListItem[] = []
+  let page = 1
+  let totalPages = Number.POSITIVE_INFINITY
+  while (page <= totalPages) {
+    const parsed = parseListPage(await fetchJsonWithRetry(listUrl(oc, page)))
+    if (!Number.isFinite(totalPages)) {
+      totalPages = Math.max(1, Math.ceil(parsed.totalCnt / LIST_DISPLAY))
+    }
+
+    // 원장에 없는 caseNumber만 DB(진실 소스)로 2차 대조 — 페이지 단위 ANY 질의
+    const toCheck = parsed.items
+      .map((it) => it.caseNumber)
+      .filter((cn) => cn && !knownCaseNumbers.has(cn))
+    if (toCheck.length > 0) {
+      const { rows } = await withRetry(() =>
+        pool.query<{ case_number: string }>(
+          `SELECT case_number FROM taxlaw_embeddings WHERE source_type = '심판례' AND case_number = ANY($1)`,
+          [toCheck],
+        ),
+      )
+      for (const r of rows) knownCaseNumbers.add(r.case_number)
+    }
+
+    const { fresh: pageFresh, knownCount } = splitKnownNew(parsed.items, {
+      caseNumbers: knownCaseNumbers,
+      seqs: knownSeqs,
+    })
+    for (const it of pageFresh) {
+      fresh.push(it)
+      knownSeqs.add(it.seq) // 페이지 경계 이동으로 인한 중복 수집 방어
+    }
+    console.log(`[증분] ${page}페이지: 신규 ${pageFresh.length}·기지 ${knownCount} (누적 신규 ${fresh.length})`)
+    if (pageFresh.length === 0) break
+    if (max > 0 && fresh.length >= max) break
+    page++
+  }
+
+  if (fresh.length === 0) {
+    console.log('[증분] 신규 심판례 없음 — 산출물 없이 종료합니다.')
+    await pool.end()
+    return
+  }
+
+  // 2) 신규 건만 본문 수집
+  const target = max > 0 ? fresh.slice(0, max) : fresh
+  const laws: TaxLaw[] = []
+  const succeeded: TribunalListItem[] = []
+  let ok = 0
+  let empty = 0
+  let fail = 0
+  await runPool(target, concurrency, async (item) => {
+    try {
+      const content = parseBody(await fetchJsonWithRetry(bodyUrl(oc, item.seq)))
+      laws.push(mapTribunalToTaxLaw(item, content))
+      succeeded.push(item)
+      if (content) ok++
+      else empty++
+    } catch (e) {
+      fail++
+      console.error(`  [본문 실패] seq=${item.seq} caseNo=${item.caseNumber}: ${scrubOc(String(e))}`)
+    }
+  })
+
+  // 3) 산출물 기록 (embed.ts 입력 포맷 그대로) — 최신 결정일 우선으로 결정론 정렬
+  laws.sort((a, b) => (b.decisionDate ?? '').localeCompare(a.decisionDate ?? '') || (a.caseNumber ?? '').localeCompare(b.caseNumber ?? ''))
+  const outPath = join('scripts', `tribunal_incremental_${todayStamp()}.json`)
+  writeFileSync(outPath, JSON.stringify(laws, null, 2) + '\n', 'utf-8')
+
+  // 4) 원장 갱신 — 성공 항목만 추가(실패분은 다음 실행에서 자동 재수집).
+  //    --max(테스트 상한) 실행은 원장을 갱신하지 않는다 — 산출물을 임베딩하지 않고 버릴 수
+  //    있는데 원장에만 기록되면 해당 건이 영구 누락되기 때문.
+  if (max === 0) {
+    ensureOutDir()
+    writeFileSync(LIST_PATH, JSON.stringify([...ledger, ...succeeded], null, 2) + '\n', 'utf-8')
+  } else {
+    console.log('[증분] --max 테스트 실행 — 원장(list.json)은 갱신하지 않습니다.')
+  }
+
+  await pool.end()
+  console.log(`[증분] 완료: 신규 ${laws.length}건 → ${outPath} (본문 성공 ${ok}·빈본문 ${empty}·실패 ${fail})`)
+  console.log(`다음 단계(별도 실행): npm run embed -- --input ${outPath.replace(/\\/g, '/')}`)
+}
+
 // ─── 메인 ───────────────────────────────────────────────────────────────────
 
 function getNumArg(flag: string, fallback: number): number {
@@ -423,9 +579,15 @@ async function main(): Promise<void> {
   ensureOutDir()
   const listOnly = process.argv.includes('--list-only')
   const finalizeOnly = process.argv.includes('--finalize')
+  const incremental = process.argv.includes('--incremental')
   const allowDuplicateCase = process.argv.includes('--allow-duplicate-case')
   const concurrency = getNumArg('--concurrency', DEFAULT_CONCURRENCY)
   const max = getNumArg('--max', 0)
+
+  if (incremental) {
+    await collectIncremental(getOc(), concurrency, max)
+    return
+  }
 
   if (finalizeOnly) {
     finalize(allowDuplicateCase)

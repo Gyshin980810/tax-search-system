@@ -79,3 +79,8 @@ test-results/
 AGENTS.md
 .codex/
 .agents/
+
+# 증분 수집 산출물 + 판례 원장 (대용량, 적재용 중간 산출물 — git 미커밋) (TAX-6B-34/35)
+scripts/tribunal_incremental_*.json
+scripts/precedent_incremental_*.json
+scripts/precedent/
