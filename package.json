@@ -27,6 +27,7 @@
     "perf:diagnose-search": "node --env-file=.env.local --conditions=react-server --import tsx scripts/perf/diagnoseSearch.ts",
     "collect:nonlaw": "node --env-file=.env.local --conditions=react-server --import tsx scripts/collectNonlaw.ts",
     "migrate": "node --env-file=.env.local --import tsx scripts/migrate.ts",
+    "citation:build": "node --env-file=.env.local --import tsx scripts/buildCitationEdges.ts",
     "embed": "node --env-file=.env.local --conditions=react-server --import tsx scripts/embed.ts",
     "smoke:vector": "node --env-file=.env.local --conditions=react-server --import tsx scripts/smokeVector.ts",
     "convert:precedent": "tsx scripts/convertPrecedentMd.ts",

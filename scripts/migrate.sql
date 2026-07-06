@@ -64,3 +64,25 @@ CREATE TABLE IF NOT EXISTS ops_feedback (
   created_at   TIMESTAMPTZ DEFAULT now()
   -- ❌ 회계사 식별자·IP·이메일·세션 ID 컬럼 일절 없음
 );
+
+-- ─── TAX-6B-31: 인용 연결망 엣지 ────────────────────────────────────────────
+-- 판례·심판례 원문에 명시된 상호 인용(예: "(대법원 2003두7392 판결 참조)")을 추출·적재한다.
+-- LLM·임베딩 호출 0(과금 0), snippet은 원문 부분 문자열 그대로(§6.1 인용 무결성).
+-- 검색 파이프라인은 이 테이블을 아직 읽지 않는다(TAX-6B-32에서 반영). 재실행 안전: IF NOT EXISTS.
+CREATE TABLE IF NOT EXISTS citation_edges (
+  id          BIGSERIAL PRIMARY KEY,
+  from_id     TEXT NOT NULL,      -- 인용하는 문서 사건번호(정규화: 공백 제거)
+  from_type   TEXT NOT NULL,      -- '판례' | '심판례'
+  to_id       TEXT NOT NULL,      -- 인용된 문서 사건번호(정규화)
+  to_type     TEXT NOT NULL,      -- '판례' | '심판례'
+  edge_type   TEXT NOT NULL,      -- 'FOLLOWS'(같은 뜻임) | 'REFERS'(참조·무표지) | 'APPEAL'(원심/환송)
+  edge_source TEXT NOT NULL,      -- 'field'(참조판례 구조화 필드) | 'body'(본문 정규식) — 신뢰도 구분
+  snippet     TEXT NOT NULL,      -- 인용 지점 원문 발췌(±90자, 무변형 — 원문 부분 문자열)
+  in_corpus   BOOLEAN NOT NULL,   -- 인용 대상이 보유 코퍼스에 존재하는가(법원명 충돌 14건은 법원명까지 대조)
+  cited_date  TEXT,               -- 인용문에 동반된 선고일 ISO(있으면) — 시간방향 검증용
+  group_no    INT,                -- 같은 괄호 그룹에서 나온 인용 묶음 번호 — 사슬 추적용
+  created_at  TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (from_id, to_id)
+);
+CREATE INDEX IF NOT EXISTS idx_citation_edges_to ON citation_edges (to_id);     -- 피인용 집계용
+CREATE INDEX IF NOT EXISTS idx_citation_edges_from ON citation_edges (from_id); -- 1-hop 확장용

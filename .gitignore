@@ -87,3 +87,5 @@ scripts/precedent/
 
 # --all 검증용 전체 재수집 산출물 (대용량, 임베딩 대상 아님 — git 미커밋)
 scripts/precedent_full/
+scripts/citation_edges.json
+scripts/tribunal_citation_source.jsonl
