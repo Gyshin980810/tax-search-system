@@ -20,6 +20,8 @@ import {
   isTargetTaxCaseType,
   toPrecSourceUrl,
   parsePrecBody,
+  parsePrecReferencedCases,
+  parsePrecFullContent,
   mapPrecedentToTaxLaw,
   type PrecListItem,
 } from '../../scripts/collectPrecedent'
@@ -188,6 +190,28 @@ describe('collectPrecedent (TAX-6B-35 판례 증분 수집기 순수 함수)', (
     it('본문 미제공 시 빈 문자열을 반환한다', () => {
       expect(parsePrecBody({})).toBe('')
       expect(parsePrecBody({ PrecService: {} })).toBe('')
+    })
+  })
+
+  describe('parsePrecReferencedCases (TAX-6B-36 인용 그래프 원천 — §6.1 원칙 준용)', () => {
+    it('참조판례 원문을 그대로 반환한다', () => {
+      const json = { PrecService: { 참조판례: '대법원 2018.6.15. 선고 2018두37519 판결' } }
+      expect(parsePrecReferencedCases(json)).toBe('대법원 2018.6.15. 선고 2018두37519 판결')
+    })
+    it('필드 누락·본문 미제공 시 빈 문자열을 반환한다', () => {
+      expect(parsePrecReferencedCases({})).toBe('')
+      expect(parsePrecReferencedCases({ PrecService: {} })).toBe('')
+    })
+  })
+
+  describe('parsePrecFullContent (TAX-6B-36 인용 그래프 원천 — §6.1 원칙 준용)', () => {
+    it('판례내용(전문) 원문을 그대로 반환한다', () => {
+      const json = { PrecService: { 판례내용: '주문\n1. 원심판결을 파기한다.\n이유\n...' } }
+      expect(parsePrecFullContent(json)).toBe('주문\n1. 원심판결을 파기한다.\n이유\n...')
+    })
+    it('필드 누락·본문 미제공 시 빈 문자열을 반환한다', () => {
+      expect(parsePrecFullContent({})).toBe('')
+      expect(parsePrecFullContent({ PrecService: {} })).toBe('')
     })
   })
 

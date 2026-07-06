@@ -28,6 +28,10 @@
  * ⚠️ 키 보호(CLAUDE.md §7): OC(API키)를 로그·산출물·sourceUrl에 노출하지 않는다.
  *     sourceUrl은 키 없는 공개 뷰어 링크(precInfoP.do — 어댑터 toPrecSourceUrl와 동일).
  *
+ * 인용 그래프 원천 보존(TAX-6B-36, 추가 API 호출 0): 본문 조회 시 같은 응답에서 참조판례·
+ * 판례내용도 함께 파싱해 precedent_citation_source_<date>.json에 별도 저장한다(있는 경우만).
+ * TaxLaw.content(검색·답변 경로)는 그대로 두고 TAX-6B-31 인용 엣지 추출 전용으로만 쓴다.
+ *
  * 실행(키는 --env-file로 주입, 코드/로그 비노출):
  *   npm run collect:precedent                    → 증분 수집(첫 실행은 백필 겸용)
  *   npm run collect:precedent -- --concurrency 5
@@ -196,6 +200,35 @@ export function parsePrecBody(json: unknown): string {
     .map((v) => String(v))
     .join('\n')
     .trim()
+}
+
+/**
+ * 본문 응답(JSON) → 참조판례 원문(있으면, TAX-6B-36). 대법원 판례에 존재하는 "법원명+선고일+
+ * 사건번호"가 정리된 인용 목록 — TaxLaw.content(검색·답변용, 판시사항+판결요지)와는 별도로
+ * 인용 그래프(TAX-6B-31) 추출 전용 원천으로만 사용한다. trim 외 가공 없음(§6.1 원칙 준용).
+ */
+export function parsePrecReferencedCases(json: unknown): string {
+  const p = (json as { PrecService?: Record<string, unknown> }).PrecService
+  if (!p) return ''
+  return String(p['참조판례'] ?? '').trim()
+}
+
+/**
+ * 본문 응답(JSON) → 판결 전문(판례내용, 있으면, TAX-6B-36). 하급심도 보유하며 인용 사건번호가
+ * 포함돼 있어(API 본문 판시사항+판결요지는 인용 밀도 0.2%로 사실상 무용) 인용 그래프 추출의
+ * 보완 원천이 된다. TaxLaw.content로는 저장하지 않는다(§2.2 — content 계약 오염 방지).
+ */
+export function parsePrecFullContent(json: unknown): string {
+  const p = (json as { PrecService?: Record<string, unknown> }).PrecService
+  if (!p) return ''
+  return String(p['판례내용'] ?? '').trim()
+}
+
+/** 인용 그래프(TAX-6B-31) 추출 전용 원천 — TaxLaw와 분리 보관(§2.2) */
+export interface PrecCitationSource {
+  caseNumber: string
+  referencedCases: string
+  fullContent: string
 }
 
 /**
@@ -396,14 +429,23 @@ async function main(): Promise<void> {
   const target = max > 0 ? fresh.slice(0, max) : fresh
   const laws: TaxLaw[] = []
   const succeeded: PrecListItem[] = []
+  // TAX-6B-36: 인용 그래프(TAX-6B-31) 추출 전용 원천 — 같은 본문 응답을 재사용(추가 API 호출 0)
+  const citationSources: PrecCitationSource[] = []
   let ok = 0
   let empty = 0
   let fail = 0
   await runPool(target, concurrency, async (item) => {
     try {
-      const content = isCourtSource(item.dataSource)
-        ? parsePrecBody(await fetchJsonWithRetry(bodyUrl(oc, item.seq)))
-        : ''
+      let content = ''
+      if (isCourtSource(item.dataSource)) {
+        const body = await fetchJsonWithRetry(bodyUrl(oc, item.seq))
+        content = parsePrecBody(body)
+        const referencedCases = parsePrecReferencedCases(body)
+        const fullContent = parsePrecFullContent(body)
+        if (referencedCases || fullContent) {
+          citationSources.push({ caseNumber: item.caseNumber, referencedCases, fullContent })
+        }
+      }
       laws.push(mapPrecedentToTaxLaw(item, content))
       succeeded.push(item)
       if (content) ok++
@@ -425,6 +467,15 @@ async function main(): Promise<void> {
     : join('scripts', `precedent_incremental_${todayStamp()}.json`)
   writeFileSync(outPath, JSON.stringify(laws, null, 2) + '\n', 'utf-8')
 
+  // 3.5) TAX-6B-36: 인용 그래프 원천 별도 저장(있는 경우만) — TaxLaw.content와 분리 보관(§2.2)
+  let citationOutPath = ''
+  if (citationSources.length > 0) {
+    citationOutPath = all
+      ? join(FULL_OUT_DIR, `precedent_citation_source_${todayStamp()}.json`)
+      : join('scripts', `precedent_citation_source_${todayStamp()}.json`)
+    writeFileSync(citationOutPath, JSON.stringify(citationSources, null, 2) + '\n', 'utf-8')
+  }
+
   // 4) 원장 갱신 — 성공 항목만 추가(실패분은 다음 실행에서 자동 재수집).
   //    --all(검증용 전체 재수집)·--max(테스트 상한) 실행은 원장을 갱신하지 않는다.
   //    --all은 운영 상태를 건드리지 않기 위함, --max는 임베딩하지 않고 버릴 산출물이
@@ -444,6 +495,9 @@ async function main(): Promise<void> {
 
   if (pool) await pool.end()
   console.log(`[증분] 완료: 신규 ${laws.length}건 → ${outPath} (본문 성공 ${ok}·빈본문 ${empty}·실패 ${fail})`)
+  if (citationOutPath) {
+    console.log(`[증분] 인용 원천(TAX-6B-36) ${citationSources.length}건 → ${citationOutPath}`)
+  }
   if (!all) {
     console.log(`다음 단계(별도 실행): npm run embed -- --input ${outPath.replace(/\\/g, '/')}`)
   }
