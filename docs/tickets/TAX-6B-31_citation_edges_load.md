@@ -75,6 +75,40 @@ scripts/buildCitationEdges.ts (배치, 오프라인)
 
 - 수집(로컬 JSON 산출)과 적재(DB insert)를 분리해 재실행·검증 가능하게 (collectTribunal.ts 선례).
 
+### 2.4 실측 보강 (2026-07-06, 그래프 엣지 설계 분석 — 회계사 승인·반영)
+
+샘플 구조를 직접 실측한 결과, 최초 설계(§2.2·§4)를 다음 4가지로 보강한다.
+
+1. **관용구 분류를 "매치 후 40자 창"이 아니라 "괄호 그룹 단위"로.**
+   심판례 인용은 거의 전부 `(…)` 괄호 안에 있고, "같은 뜻임" 그룹의 **8.8%가 인용 2건 이상의
+   사슬**이다(예: `(대법원 2005.1.28. 선고 2002두2871 판결, 대법원 2023.11.16. 선고
+   2023두50004 판결, 같은 뜻임)`). 매치 직후 40자 창 방식은 앞쪽 인용의 관용구를 못 보고
+   `FOLLOWS`를 `REFERS`로 잘못 분류한다 — 5,080건 표본에서 **6.2%(313건) 오분류** 실측.
+   → §4.2·§9.1 STEP1을 "괄호 그룹째 잘라 그룹 끝의 관용구를 그룹 내 모든 인용에 적용"으로 수정.
+2. **판례→판례 엣지는 `참조판례` 구조화 필드를 1순위 원천으로.**
+   API 본문(판시사항+판결요지)의 인용 밀도는 **0.2%(8,366건 중 19건)**로 사실상 무용하지만,
+   대법원 판례의 `참조판례` 필드는 "법원명+선고일+사건번호"가 정리된 목록이라 정규식보다
+   오탐 위험이 없고 날짜 대조까지 된다. 하급심은 이 필드가 비어 있으나 `판례내용`(전문)에
+   문서당 평균 ~4건의 인용이 있다. → 이 두 필드는 TAX-6B-36(수집기 확장, 별도 파일)에서
+   보존하며, 본 티켓은 그 산출물(`precedent_citation_source_<date>.json`)도 추출 입력에 포함한다.
+3. **원심(심급) 인용을 선례 인용과 분리 — 신규 엣지 타입 `APPEAL`.**
+   하급심 전문에는 자신의 1심 사건번호가 섞여 나온다. 이를 `FOLLOWS`/`REFERS`와 같은 목록에
+   두면 "선례를 인용"과 "같은 사건의 원심"이 혼동된다(PoC 엣지에서도 `2025두35626 →
+   2024누39327` 같은 원심 링크가 실제 확인됨). → `edge_type`에 `APPEAL` 추가, "원심판결"/
+   "환송" 맥락에서만 분류.
+4. **시간 방향 검증을 안전판으로 추가.** 인용문에 선고일이 함께 있으면(참조판례 필드는 항상
+   동반) 대상 노드의 `decisionDate`와 대조해 `from.결정일 ≥ to.선고일`이 아닌 엣지는
+   의심 표시(플래그)한다 — 별도 컬럼 없이 적재 로그에만 남겨 후속 검수 자료로 삼는다.
+
+> **정정(2026-07-06, 판례 중복 정리 작업 중 재검증)**: 위 "충돌 0건"은 당시 부분집합(고등법원 "구"
+> 사건 미포함) 기준이었다. 판례 전체 코퍼스로 다시 대조하니 **실제로 사건번호 단독 키 충돌이 14건
+> 확인됐다** — 전부 1998년 행정법원 설치 이전, 서울·대구·광주·부산 각 고등법원이 1심 행정사건
+> 번호("구")를 독립적으로 매기던 시기의 것(예: `71구9`가 서울고등법원·대구고등법원에 각각 다른
+> 사건으로 존재). **따라서 `citation_edges`의 `from_id`/`to_id`는 사건번호만으로는 불충분하며,
+> `in_corpus` 판정·엣지 생성 시 최소한 `issuing_body`(법원명)까지 함께 대조해야 한다.** DDL의
+> `from_id`/`to_id`를 "사건번호"에서 "사건번호+법원명 복합키"로 변경하거나, 매칭 시 법원명이 다르면
+> 후보에서 제외하는 필터를 추가하는 것으로 §9.1 STEP1·STEP3에 반영 필요(구현 시 착수).
+
 ---
 
 ## 3. Scope (작업 범위) ⭐
@@ -99,7 +133,7 @@ scripts/buildCitationEdges.ts (배치, 오프라인)
 
 ## 4. Strategy (구현 힌트)
 
-1. **DDL**:
+1. **DDL** (§2.4 보강 반영 — `edge_source`·`cited_date`·`group_no` 추가, `APPEAL` 타입 추가):
    ```sql
    CREATE TABLE IF NOT EXISTS citation_edges (
      id BIGSERIAL PRIMARY KEY,
@@ -107,17 +141,22 @@ scripts/buildCitationEdges.ts (배치, 오프라인)
      from_type TEXT NOT NULL,    -- '판례' | '심판례'
      to_id TEXT NOT NULL,        -- 인용된 문서 사건번호(정규화)
      to_type TEXT NOT NULL,
-     edge_type TEXT NOT NULL,    -- 'FOLLOWS' | 'REFERS'
+     edge_type TEXT NOT NULL,    -- 'FOLLOWS' | 'REFERS' | 'APPEAL'(원심/환송 — 선례 인용과 분리)
+     edge_source TEXT NOT NULL,  -- 'field'(참조판례 구조화 필드) | 'body'(본문 정규식) — 신뢰도 구분
      snippet TEXT NOT NULL,      -- 인용 지점 원문 발췌(±90자, 무변형)
      in_corpus BOOLEAN NOT NULL, -- 인용 대상이 보유 코퍼스에 존재하는가
+     cited_date TEXT,            -- 인용문에 동반된 선고일(있으면) — 대상 검증용
+     group_no INT,               -- 같은 괄호 그룹에서 나온 인용 묶음 번호 — 사슬 추적용
      created_at TIMESTAMPTZ DEFAULT now(),
      UNIQUE (from_id, to_id)
    );
    CREATE INDEX IF NOT EXISTS idx_citation_edges_to ON citation_edges (to_id);   -- 피인용 집계용
    CREATE INDEX IF NOT EXISTS idx_citation_edges_from ON citation_edges (from_id); -- 1-hop 확장용
    ```
-2. **분류 순수함수** (domain): 인용 매치 직후 40자 창에서 관용구 검사 →
-   `같은\s*뜻임` → `FOLLOWS`, 그 외 전부 `REFERS` (가장 약한 주장이 기본값 = 안전).
+2. **분류 순수함수** (domain, §2.4 보강): 괄호 그룹(`(…)`) 단위로 잘라 그룹 끝의 관용구를
+   그룹 내 **모든 인용에 적용** → `같은\s*뜻임` 이면 `FOLLOWS`, "원심판결"/"환송" 맥락이면
+   `APPEAL`, 그 외 전부 `REFERS`(가장 약한 주장이 기본값 = 안전). 40자 창 방식 대비
+   사슬 오분류 6.2% 해소(§2.4 실측).
 3. **추출 배치**: records.jsonl 스트리밍(2.3GB, readline) + precedent_full.json 일괄 로드.
    같은 (from,to) 쌍 중복은 첫 발생만. 진행 로그 2만 건 단위.
 4. **적재 배치**: `INSERT ... ON CONFLICT (from_id, to_id) DO NOTHING`, 1,000행 단위 배치.
@@ -176,7 +215,13 @@ scripts/buildCitationEdges.ts (배치, 오프라인)
 
 - `TRIBUNAL_CITATION_PATTERN = /(조심|국심|감심)\s*제?\s*([0-9]{4}[가-힣][0-9]+)/g` — 기관 접두 필수(오탐 차단, 재평가 프로브 검증분과 동일)
 - `extractTribunalSelfId(lawName: string): string | null` — 자기 사건번호 추출(예: "조세심판원 조심 2026중1364")
-- `classifyCitationEdge(content: string, matchEnd: number): 'FOLLOWS' | 'REFERS'` — 매치 직후 40자 창에서 `같은\s*뜻임` 검사 → FOLLOWS, 그 외 전부 REFERS(가장 약한 주장이 기본값)
+- `splitBracketGroups(content: string): { text: string; start: number; end: number }[]` — 괄호
+  `(…)` 단위로 자르는 헬퍼(§2.4 보강). 중첩·미종결 괄호는 보수적으로 스킵(오탐<누락).
+- `classifyCitationEdge(groupText: string): 'FOLLOWS' | 'REFERS' | 'APPEAL'` — 그룹 텍스트
+  전체에서 관용구 검사: `같은\s*뜻임` → FOLLOWS, `원심판결`·`환송` → APPEAL, 그 외 전부
+  REFERS(가장 약한 주장이 기본값). 그룹 내 인용 전부에 동일하게 적용(사슬 오분류 방지).
+- `extractCitedDate(groupText: string): string | null` — 그룹 내 "YYYY.MM.DD. 선고"류 날짜를
+  ISO로 파싱(있으면), 시간 방향 검증용(§2.4 ④).
 - `extractSnippet(content: string, index: number, length: number): string` — ±90자, `content.slice()`만 사용(원문 부분 문자열 보장, §6.1)
 
 **STEP 2 — DDL 추가** (`scripts/migrate.sql`)
@@ -186,6 +231,10 @@ scripts/buildCitationEdges.ts (배치, 오프라인)
 **STEP 3 — 배치 스크립트 신규** (`scripts/buildCitationEdges.ts`)
 
 - `--extract`: ① `precedent_full.json` 일괄 로드로 판례 사건번호 집합 구축 → ② `records.jsonl` 1차 스트리밍(readline, `law` 언랩)으로 심판례 자기번호 집합 구축 → ③ 2차 스트리밍 + 판례 파일 순회로 3방향 엣지 추출·분류 → `scripts/citation_edges.json` 산출(.gitignore 등재) + 요약 통계(방향별 엣지 수·FOLLOWS 비율·in_corpus 비율) 출력
+  - **판례→판례 원천 이원화(§2.4 보강)**: `precedent_citation_source_*.json`(TAX-6B-36 산출물)이
+    있으면 우선 사용 — `참조판례` 필드는 `edge_source='field'`로 정밀 추출(날짜 동반),
+    `판례내용`(전문)은 본문 정규식으로 `edge_source='body'`. 산출물이 없는 문서는 기존
+    판시사항+판결요지 정규식으로 폴백(밀도 낮음을 감수).
 - `--load`: `citation_edges.json` → pg Pool(`ssl: { rejectUnauthorized: false }`, migrate.ts 패턴) → `INSERT ... ON CONFLICT (from_id, to_id) DO NOTHING`, 1,000행 배치, 진행 로그 2만 건 단위
 - 같은 (from,to) 쌍은 첫 발생만 유지(snippet은 최초 인용 문맥)
 
@@ -211,6 +260,7 @@ scripts/buildCitationEdges.ts (배치, 오프라인)
 ## 10. Related Tickets
 
 - 선행: `TAX-6B-23_precedent_citation_graph_poc.md` (효용 검증), `TAX-6B-18_tribunal_full_load.md` (데이터 원천)
+- 선행(선택, 판례 엣지 원천 강화): `TAX-6B-36_precedent_citation_source_fields.md` (참조판례·판례내용 필드 보존)
 - 후속: `TAX-6B-32_citation_graph_reference_expansion.md`, `TAX-6B-33_overruled_review_queue.md`
 
 ## 11. Report Link

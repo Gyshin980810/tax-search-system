@@ -69,6 +69,10 @@ generateAnswer (usecase)
 - 확장 문서는 T3(심판례)/T4(판례) → 참고목록 전용, 🟢 승격 절대 금지.
 - 참고목록은 V1~V6 비대상(SSOT §7.4)이므로 검증 파이프라인 무변경.
 - `FOLLOWS` 엣지로 추가된 문서는 표시 문구에 "인용 선례" 등 유래를 밝히는 것 권장(UI 범위는 최소).
+- **`APPEAL` 엣지는 1-hop 확장에서 제외한다(2026-07-06 그래프 엣지 설계 분석 보강, TAX-6B-31 §2.4).**
+  `APPEAL`은 "선례를 지지/참고"가 아니라 "같은 사건의 원심·환송심"이므로, 확장 후보에 섞으면
+  회계사가 "관련 다른 사건"으로 오인할 위험이 있다. `getOutgoing`은 `edge_type IN
+  ('FOLLOWS','REFERS')`만 조회하도록 Adapter 쿼리에서 필터.
 
 ---
 
@@ -166,7 +170,7 @@ interface ICitationGraphPort {
 **STEP 2 — Adapter 신규** (`src/adapters/citationGraph.ts`)
 
 - pg Pool은 `src/adapters/vectorSearch.ts` 연결 패턴 재사용.
-- `getOutgoing`: `SELECT ... FROM citation_edges WHERE from_id = ANY($1) AND in_corpus` (1쿼리)
+- `getOutgoing`: `SELECT ... FROM citation_edges WHERE from_id = ANY($1) AND in_corpus AND edge_type IN ('FOLLOWS','REFERS')` (1쿼리) — `APPEAL`(원심/환송)은 제외(§2.3 보강)
 - `getInDegrees`: `SELECT to_id, count(*) FROM citation_edges WHERE to_id = ANY($1) GROUP BY to_id` (1쿼리)
 - `getDocumentsByCaseNumbers`: `taxlaw_embeddings`에서 `case_number = ANY($1)` 조회 → TaxLaw 매핑(content 원문 그대로, §6.1) (1쿼리)
 - 합계 SQL 3콜(전부 IN 배치) — LLM·임베딩 콜 0. 티켓 §2.2의 "배치 1회"는 "배치 소량(≤3콜)"로 정정해 이해할 것.
