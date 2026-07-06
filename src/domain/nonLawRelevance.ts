@@ -84,3 +84,25 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 export function combinedScore(textScore: number, cosine: number): number {
   return textScore + SEMANTIC_WEIGHT * Math.max(0, cosine)
 }
+
+// ─── 피인용 부스트 — TAX-6B-32 (인용 그래프 랭킹) ─────────────────────────────
+//
+// 참고 목록 정렬에 "권위 신호"(피인용수)를 반영한다. 많이 인용된 확립 선례를 위로 올리되,
+// 189회짜리 허브가 검색 결과를 지배하지 않도록 log 스케일로 완만하게 가산한다.
+
+/**
+ * 피인용 부스트 가중치 — 보수적 시작값(TAX-6B-32, 회계사 결정 2026-07-06 "보수적 착수").
+ * 테스트로 고정 후 골든셋 회귀로 부작용을 확인하고 실측 튜닝한다.
+ */
+export const CITATION_BOOST_WEIGHT = 0.5
+
+/**
+ * 피인용수 → 점수 부스트. log 스케일이라 완만하다.
+ *  - inDegree 0 → 0점(부스트 없음), 1회 → ≈0.35점, 189회(리딩 케이스) → ≈2.65점.
+ *  - "권위는 정답이 아님"(TAX-6B-32 §7) — 1회 인용과 189회 인용이 하늘·땅으로 벌어지지 않게.
+ *  - 음수 방어: 비정상 입력(음수)은 0으로 간주.
+ * 원문을 읽지 않는 순수 수치 연산이다(§6.1 무관).
+ */
+export function citationBoost(inDegree: number): number {
+  return CITATION_BOOST_WEIGHT * Math.log1p(Math.max(0, inDegree))
+}

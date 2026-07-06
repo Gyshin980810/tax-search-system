@@ -4,6 +4,7 @@ import { OpenAIQueryRewriterAdapter } from '@/adapters/llmQueryRewriter'
 import { OpenAIAnswerGeneratorAdapter } from '@/adapters/llmAnswerGenerator'
 import { VoyageEmbeddingAdapter } from '@/adapters/embedding'
 import { PgVectorSearchAdapter } from '@/adapters/vectorSearch'
+import { PgCitationGraphAdapter } from '@/adapters/citationGraph'
 import { LawVerifierAdapter } from '@/adapters/lawVerifier'
 import { PgOpsLogAdapter, NullOpsLogAdapter } from '@/adapters/opsLog'
 import { generateAnswer } from '@/usecases/generateAnswer'
@@ -65,6 +66,11 @@ export async function POST(request: Request) {
     const vectorSearchPort = config.databaseUrl
       ? new PgVectorSearchAdapter(config.databaseUrl)
       : undefined
+    // 인용 그래프(citation_edges) 조회 — DATABASE_URL 있을 때만 주입 (TAX-6B-32).
+    // 없거나 조회 실패 시 generateAnswer가 그래프 없이 기존 참고 목록을 구성한다(graceful degrade).
+    const citationGraphPort = config.databaseUrl
+      ? new PgCitationGraphAdapter(config.databaseUrl)
+      : undefined
 
     // DATABASE_URL이 있으면 3단계 fallback 활성화, 없으면 직접 매칭만 사용 (TAX-026-B)
     const directPort = new NationalTaxLawAdapter()
@@ -91,6 +97,8 @@ export async function POST(request: Request) {
       // 판례 코퍼스(pgvector) 라이브 검색용 — DATABASE_URL 있을 때만 주입 (TAX-6B-14).
       // 없거나 실패 시 generateAnswer가 판례 경로를 조용히 건너뛴다(graceful degrade).
       vectorSearchPort,
+      // 인용 그래프(citation_edges) 조회용 — 참고 목록 1-hop 확장·피인용 부스트 (TAX-6B-32).
+      citationGraphPort,
     )
 
     return NextResponse.json(result, { status: 200 })

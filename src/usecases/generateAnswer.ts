@@ -3,13 +3,15 @@ import { detectPii, maskPhoneEmail } from '../utils/piiFilter'
 import { AppError } from '../domain/errors'
 import { DISCLAIMER } from '../domain/disclaimer'
 import { computeVerifyDiagnostics } from '../adapters/verifyDiagnostics'
-import { extractTerms, scoreRelevance, cosineSimilarity, combinedScore } from '../domain/nonLawRelevance'
+import { extractTerms, scoreRelevance, cosineSimilarity, combinedScore, citationBoost } from '../domain/nonLawRelevance'
+import { normalizeTribunalCaseNumber } from '../domain/precedentCitation'
 import type { IQueryRewriterPort } from '../ports/llmQueryRewriterPort'
 import type { ISearchPort } from '../ports/taxLawSearchPort'
 import type { IAnswerGeneratorPort } from '../ports/llmAnswerGeneratorPort'
 import type { ILawVerifierPort } from '../ports/lawVerifierPort'
 import type { IEmbeddingPort } from '../ports/embeddingPort'
 import type { IVectorSearchPort } from '../ports/vectorSearchPort'
+import type { ICitationGraphPort } from '../ports/citationGraphPort'
 import type { IOpsLogPort, OpsQueryLogEntry } from '../ports/opsLogPort'
 import type { LabeledAnswer } from '../domain/LabeledAnswer'
 import type { TemporalContext } from '../domain/TemporalContext'
@@ -66,6 +68,12 @@ const VECTOR_REFERENCE_GATES: { sourceType: '판례' | '심판례'; topK: number
   { sourceType: '판례', topK: 5, minSimilarity: 0.5, max: 2 },
   { sourceType: '심판례', topK: 5, minSimilarity: 0.5, max: 2 },
 ]
+
+/**
+ * 인용 그래프 1-hop 확장으로 참고 목록에 추가하는 최대 문서 수 (TAX-6B-32).
+ * 원문이 지목한 선례라도 참고 목록 비대화를 막기 위해 상한을 둔다(피인용 부스트 상위 N건만).
+ */
+const MAX_CITATION_EXPANSION = 3
 
 /**
  * 참고자료(TaxLaw)의 관련도 점수 — 사건명·명칭(제목)과 본문(content)을 함께 평가한다 (TAX-015C → TAX-6B-10).
@@ -125,6 +133,7 @@ async function buildReferences(
   question: string,
   embeddingPort?: IEmbeddingPort,
   vectorSearchPort?: IVectorSearchPort,
+  citationGraphPort?: ICitationGraphPort,
 ): Promise<TaxLaw[]> {
   const citedKeys = new Set(citations.map((c) => identityKey(c.taxLaw)))
   // citable 중 인용되지 않은 비법령(해석례·판례)
@@ -159,8 +168,12 @@ async function buildReferences(
   )
   const vectorScored = vectorPicks.flat()
 
+  // [4.5·4.6] 인용 그래프 반영 (TAX-6B-32): 원문이 지목한 선례 1-hop 확장 + 피인용 부스트.
+  //  citationGraphPort 미주입·DB 오류 시 입력을 그대로 돌려줘 기존 동작과 동일하다(graceful degrade).
+  const withGraph = await applyCitationGraph([...externalFiltered, ...vectorScored], citationGraphPort)
+
   // [5] 병합 → 정렬 → 상한.
-  const merged = [...externalFiltered, ...vectorScored].sort((a, b) => {
+  const merged = withGraph.sort((a, b) => {
     if (a.score !== b.score) return b.score - a.score
     const byDate = (b.ref.decisionDate ?? '').localeCompare(a.ref.decisionDate ?? '')
     if (byDate !== 0) return byDate
@@ -168,6 +181,93 @@ async function buildReferences(
   })
 
   return merged.slice(0, MAX_REFERENCES).map((s) => s.ref)
+}
+
+/** 사건번호 정규화 식별 키 — 인용 그래프(엣지·DB) 대조용. 비법령만 caseNumber를 가진다 */
+function citationKey(ref: TaxLaw): string {
+  return `${ref.sourceType}|${normalizeTribunalCaseNumber(ref.caseNumber ?? '')}`
+}
+
+/**
+ * 참고 목록 후보에 인용 그래프(citation_edges)를 반영한다 (TAX-6B-32).
+ *
+ *  [4.5] 1-hop 확장: 현재 후보가 원문에서 지목한 선례(FOLLOWS/REFERS·in_corpus) 중
+ *        아직 노출되지 않은 문서를 최대 MAX_CITATION_EXPANSION건 참고 목록에 추가한다.
+ *        확장 문서는 질문 관련도 컷오프를 면제한다(원문 직접 지목 = 결정론적 관련,
+ *        회계사 결정 2026-07-06). 점수는 피인용 부스트만 부여한다.
+ *  [4.6] 부스트: 기존 + 확장 문서 전체 점수에 피인용수 log 부스트를 가산한다
+ *        (회계사 결정 2026-07-06 "전체 적용"). 컷오프는 이미 [3]에서 끝나 부스트가
+ *        탈락 자료를 되살리지 못한다 — 생존 자료의 순서만 조정한다.
+ *
+ * 사건번호는 엣지·DB와 동일 형식으로 정규화(normalizeTribunalCaseNumber)해 조회·대조한다
+ * — 검색 후보의 표기 변이('조심 2018지166')와 DB 표기('조심2018지0166')가 어긋나지 않게.
+ *
+ * - citationGraphPort 미주입 시 입력 배열을 그대로 반환(기존 동작 100% 동일, 무회귀).
+ * - DB 오류 시 try/catch로 입력을 그대로 반환(graceful degrade, TAX-6B-12 선례).
+ * - 확장 문서는 references에만 합류하며 citations로 승격되지 않는다(구조적 — 이 경로엔 citations 접근 지점 부재).
+ * - SQL 조회는 배치 최대 3콜(getOutgoing·getDocumentsByCaseNumbers·getInDegrees), LLM·임베딩 호출 0(P95 보호).
+ */
+async function applyCitationGraph(
+  candidates: { ref: TaxLaw; score: number }[],
+  citationGraphPort?: ICitationGraphPort,
+): Promise<{ ref: TaxLaw; score: number }[]> {
+  if (!citationGraphPort) return candidates
+  try {
+    // 현재 노출 예정 문서의 정규화 키(중복 확장 방지) + 발신 조회 입력 사건번호
+    const shownKeys = new Set(candidates.map((c) => citationKey(c.ref)))
+    const sourceCaseNumbers = candidates
+      .map((c) => normalizeTribunalCaseNumber(c.ref.caseNumber ?? ''))
+      .filter((n) => n !== '')
+
+    // [4.5] 1-hop 확장 대상 수집 — 미노출·서로 중복 제거
+    const edges = await citationGraphPort.getOutgoing(sourceCaseNumbers)
+    const expandIds: string[] = []
+    const seenExpand = new Set<string>()
+    for (const e of edges) {
+      if (shownKeys.has(`${e.toType}|${e.toId}`) || seenExpand.has(e.toId)) continue
+      seenExpand.add(e.toId)
+      expandIds.push(e.toId)
+    }
+
+    // 확장 문서 본문 조회 → 후보 합류(점수 0에서 시작, [4.6]에서 부스트)
+    let expanded: { ref: TaxLaw; score: number }[] = []
+    if (expandIds.length > 0) {
+      const docs = await citationGraphPort.getDocumentsByCaseNumbers(expandIds)
+      const dedup = new Map<string, TaxLaw>()
+      for (const d of docs) {
+        const key = citationKey(d)
+        if (shownKeys.has(key) || dedup.has(key)) continue
+        dedup.set(key, d)
+      }
+      expanded = [...dedup.values()].map((ref) => ({ ref, score: 0 }))
+    }
+
+    // [4.6] 피인용 부스트 — 기존 + 확장 전체 in-degree 배치 1콜
+    const inDegrees = await citationGraphPort.getInDegrees(
+      [...candidates, ...expanded]
+        .map((c) => normalizeTribunalCaseNumber(c.ref.caseNumber ?? ''))
+        .filter((n) => n !== ''),
+    )
+    const boostOf = (ref: TaxLaw): number =>
+      citationBoost(inDegrees.get(normalizeTribunalCaseNumber(ref.caseNumber ?? '')) ?? 0)
+
+    // 기존 후보: 전부 유지 + 부스트 가산
+    const boostedExisting = candidates.map((c) => ({ ref: c.ref, score: c.score + boostOf(c.ref) }))
+    // 확장 문서: 부스트 점수 순 상위 MAX_CITATION_EXPANSION건만(상한 — 비대화 방지, 동점은 사건번호 오름차순)
+    const boostedExpanded = expanded
+      .map((e) => ({ ref: e.ref, score: e.score + boostOf(e.ref) }))
+      .sort((a, b) =>
+        a.score !== b.score
+          ? b.score - a.score
+          : (a.ref.caseNumber ?? '').localeCompare(b.ref.caseNumber ?? ''),
+      )
+      .slice(0, MAX_CITATION_EXPANSION)
+
+    return [...boostedExisting, ...boostedExpanded]
+  } catch {
+    // 그래프 조회 실패 — 인용 그래프 없이 기존 참고 목록 그대로(핵심 파이프라인 영향 없음)
+    return candidates
+  }
 }
 
 /**
@@ -388,6 +488,7 @@ export async function generateAnswer(
   opsLog?: IOpsLogPort,
   embeddingPort?: IEmbeddingPort,
   vectorSearchPort?: IVectorSearchPort,
+  citationGraphPort?: ICitationGraphPort,
 ): Promise<LabeledAnswer> {
   // [사전] PII 필터 — 감지 시 PiiDetectedError throw (운영 로그에 도달하지 않음)
   detectPii(question)
@@ -473,6 +574,7 @@ export async function generateAnswer(
       question,
       embeddingPort,
       vectorSearchPort,
+      citationGraphPort,
     )
     // TAX-042D Stage 4 풀세트 보강 E·F·G — V3 라벨 적정성 진단 마커 부착.
     //   V3 PASS/FAIL 판정은 lawVerifier가 단독 수행하며, 본 호출은 운영 로그·후속 측정용
