@@ -30,6 +30,9 @@
  *   npm run collect:tribunal                 → 1~3단계 전체(목록→본문→finalize), 이어받기
  *   npm run collect:tribunal -- --list-only  → 1단계 목록만 수집(연결 확인용)
  *   npm run collect:tribunal -- --finalize   → 3단계만(records.jsonl → tribunal_full.json)
+ *   npm run collect:tribunal -- --citation-source
+ *     → TAX-6B-37: records.jsonl 각 seq 본문 재조회 → 참조결정(심판례→심판례 인용)을
+ *       scripts/tribunal_citation_source.jsonl 로 별도 보존(content 무변경). append 방식 resume 안전.
  *   npm run collect:tribunal -- --concurrency 5
  *   npm run collect:tribunal -- --max 200    → 테스트용 상한(앞 N건만 본문 수집)
  *   npm run collect:tribunal -- --allow-duplicate-case
@@ -46,11 +49,13 @@
  */
 import {
   appendFileSync,
+  createReadStream,
   existsSync,
   mkdirSync,
   readFileSync,
   writeFileSync,
 } from 'node:fs'
+import { createInterface } from 'node:readline'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Pool } from 'pg'
@@ -66,6 +71,8 @@ const RECORDS_PATH = join(OUT_DIR, 'records.jsonl')
 const CHECKPOINT_PATH = join(OUT_DIR, 'checkpoint.json')
 const DUPLICATE_CASE_REPORT_PATH = join(OUT_DIR, 'duplicate_case_numbers.json')
 const FINAL_PATH = join('scripts', 'tribunal_full.json')
+/** TAX-6B-37: 참조결정(심판례→심판례 인용) 원천 — content와 분리 보관. append 방식(resume 안전). */
+const CITATION_SOURCE_PATH = join('scripts', 'tribunal_citation_source.jsonl')
 
 /** 목록 1페이지 건수 — API 최대 100 */
 const LIST_DISPLAY = 100
@@ -141,6 +148,19 @@ export function parseBody(json: unknown): string {
     .map((v) => String(v))
     .join('\n')
     .trim()
+}
+
+/**
+ * 본문 응답(JSON) → 참조결정 원문(있으면, TAX-6B-37). 이 심판례가 참조한 다른 심판례
+ * 사건번호가 " / "로 구분돼 정리된 구조화 필드(예: '조심2022서1437 / 조심2016부3139').
+ * content(주문+재결요지+이유)와는 별도로 인용 그래프(TAX-6B-31)의 심판례→심판례 정밀 추출
+ * 전용 원천으로만 사용한다. trim 외 가공 없음(§6.1 원칙 준용).
+ * ⚠️ 참조결정은 심판례(조심/국심/감심)만 담으며 대법원 판례는 포함하지 않는다(실측 확인).
+ */
+export function parseReferencedDecisions(json: unknown): string {
+  const s = (json as { SpecialDeccService?: Record<string, unknown> }).SpecialDeccService
+  if (!s) return ''
+  return String(s['참조결정'] ?? '').trim()
 }
 
 /**
@@ -444,6 +464,87 @@ function finalize(allowDuplicateCase = false): void {
   console.log(`다음 단계(추후, 별도 실행): npm run embed -- --input ${FINAL_PATH.replace(/\\/g, '/')}`)
 }
 
+// ─── 인용 원천 재조회 (--citation-source, TAX-6B-37) ──────────────────────────
+
+/**
+ * records.jsonl의 각 seq 본문을 재조회해 참조결정(심판례→심판례 인용)만 별도 파일로 보존한다.
+ * content(records.jsonl)는 건드리지 않는다(§6.1). 처리한 seq를 append로 기록해 중단돼도 재개 안전
+ * (출력 파일 자체가 done-set). TAX-6B-31이 referencedDecisions 비어있지 않은 행만 사용.
+ */
+async function collectCitationSources(oc: string, concurrency: number, max: number): Promise<void> {
+  if (!existsSync(RECORDS_PATH)) {
+    console.error(`[citation-source] records.jsonl 없음(${RECORDS_PATH}). 먼저 본문 수집을 실행하세요.`)
+    process.exit(1)
+  }
+  // 대상 = records.jsonl의 {seq, caseNumber} — 2.3GB이므로 스트리밍 필수(readFileSync는 문자열 상한 초과)
+  const targets: { seq: string; caseNumber: string }[] = []
+  const recStream = createInterface({ input: createReadStream(RECORDS_PATH), crlfDelay: Infinity })
+  for await (const line of recStream) {
+    const t = line.trim()
+    if (!t) continue
+    try {
+      const rec = JSON.parse(t) as { seq?: string; law?: { caseNumber?: string } }
+      if (rec.seq) targets.push({ seq: rec.seq, caseNumber: rec.law?.caseNumber ?? '' })
+    } catch {
+      // 손상 줄 무시
+    }
+  }
+  recStream.close()
+  // 이미 처리한 seq 스킵(resume) — 출력 파일 자체가 done-set
+  const done = new Set<string>()
+  if (existsSync(CITATION_SOURCE_PATH)) {
+    for (const line of readFileSync(CITATION_SOURCE_PATH, 'utf-8').split('\n')) {
+      const t = line.trim()
+      if (!t) continue
+      try {
+        const r = JSON.parse(t) as { seq?: string }
+        if (r.seq) done.add(r.seq)
+      } catch {
+        // 손상 줄 무시
+      }
+    }
+  }
+  let remaining = targets.filter((it) => !done.has(it.seq))
+  if (max > 0) remaining = remaining.slice(0, max)
+  console.log(
+    `[citation-source] 전체 ${targets.length}건 / 완료 ${done.size}건 / 이번 대상 ${remaining.length}건 (동시성 ${concurrency})`,
+  )
+
+  let withRef = 0
+  let empty = 0
+  let fail = 0
+  let processed = 0
+  const startedAt = Date.now()
+  await runPool(remaining, concurrency, async (it) => {
+    try {
+      const ref = parseReferencedDecisions(await fetchJsonWithRetry(bodyUrl(oc, it.seq)))
+      // 참조결정 유무와 무관하게 처리 seq 기록(done-set 정확성). §6.1 trim 외 무가공.
+      appendFileSync(
+        CITATION_SOURCE_PATH,
+        JSON.stringify({ seq: it.seq, caseNumber: it.caseNumber, referencedDecisions: ref }) + '\n',
+        'utf-8',
+      )
+      if (ref) withRef++
+      else empty++
+    } catch (e) {
+      fail++
+      console.error(`  [참조결정 실패] seq=${it.seq}: ${scrubOc(String(e))}`)
+    } finally {
+      processed++
+      if (processed % CHECKPOINT_EVERY === 0) {
+        const rate = processed / ((Date.now() - startedAt) / 1000)
+        console.log(
+          `  진행 ${processed}/${remaining.length} (참조결정 ${withRef}·없음 ${empty}·실패 ${fail}, ${rate.toFixed(1)}건/s)`,
+        )
+      }
+    }
+  })
+  console.log(
+    `[citation-source] 완료: 참조결정 보유 ${withRef}·없음 ${empty}·실패 ${fail} → ${CITATION_SOURCE_PATH}`,
+  )
+  if (fail > 0) console.log(`  ⚠️ 실패 ${fail}건 — 재실행하면 미처리 seq만 이어받습니다.`)
+}
+
 // ─── 증분 수집 (--incremental, TAX-6B-34) ─────────────────────────────────────
 
 /** 오늘 날짜 스탬프(YYYYMMDD) — 증분 산출물 파일명용 */
@@ -580,12 +681,18 @@ async function main(): Promise<void> {
   const listOnly = process.argv.includes('--list-only')
   const finalizeOnly = process.argv.includes('--finalize')
   const incremental = process.argv.includes('--incremental')
+  const citationSource = process.argv.includes('--citation-source')
   const allowDuplicateCase = process.argv.includes('--allow-duplicate-case')
   const concurrency = getNumArg('--concurrency', DEFAULT_CONCURRENCY)
   const max = getNumArg('--max', 0)
 
   if (incremental) {
     await collectIncremental(getOc(), concurrency, max)
+    return
+  }
+
+  if (citationSource) {
+    await collectCitationSources(getOc(), concurrency, max)
     return
   }
 

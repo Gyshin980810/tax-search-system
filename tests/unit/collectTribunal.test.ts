@@ -14,6 +14,7 @@ import {
   scrubOc,
   parseListPage,
   parseBody,
+  parseReferencedDecisions,
   mapTribunalToTaxLaw,
   findDuplicateCaseNumbers,
   splitKnownNew,
@@ -121,6 +122,28 @@ describe('collectTribunal (TAX-6B-18 심판례 수집기 순수 함수)', () => 
     it('본문 미제공 시 빈 문자열을 반환한다', () => {
       expect(parseBody({})).toBe('')
       expect(parseBody({ SpecialDeccService: {} })).toBe('')
+    })
+  })
+
+  describe('parseReferencedDecisions (TAX-6B-37 참조결정, §6.1 무가공)', () => {
+    it('참조결정 필드를 trim만 적용해 원문 그대로 반환한다', () => {
+      const ref = parseReferencedDecisions({
+        SpecialDeccService: { 참조결정: '  조심2022서1437 / 조심2016부3139 / 조심2023서9833  ' },
+      })
+      expect(ref).toBe('조심2022서1437 / 조심2016부3139 / 조심2023서9833')
+    })
+    it('참조결정이 없거나 빈 값이면 빈 문자열을 반환한다', () => {
+      expect(parseReferencedDecisions({ SpecialDeccService: { 참조결정: '' } })).toBe('')
+      expect(parseReferencedDecisions({ SpecialDeccService: {} })).toBe('')
+      expect(parseReferencedDecisions({})).toBe('')
+    })
+    it('content(주문/재결요지/이유)와 독립적으로 파싱한다', () => {
+      // 같은 응답에서 content와 참조결정이 서로 영향을 주지 않는다
+      const body = {
+        SpecialDeccService: { 주문: '기각한다.', 참조결정: '조심2020부1558' },
+      }
+      expect(parseBody(body)).toBe('기각한다.')
+      expect(parseReferencedDecisions(body)).toBe('조심2020부1558')
     })
   })
 
