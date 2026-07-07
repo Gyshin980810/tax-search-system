@@ -331,11 +331,19 @@ function toSourceUrl(lsiSeq: string, efYd: string): string {
  *  - targetDate 지정: 그 시점 직전 공포 1개(당시 적용된 법) + 직후 공포 1개(다음 개정 경계)
  *  - 미지정: 최신 공포 2개
  */
-function selectRelevantAddenda(addenda: RawBuchik[], targetDate?: Date): RawBuchik[] {
+function addendaTieKey(buchik: RawBuchik): string {
+  return `${buchik.부칙공포번호?.trim() ?? ''}|${buchik.부칙키?.trim() ?? ''}`
+}
+
+export function selectRelevantAddenda(addenda: RawBuchik[], targetDate?: Date): RawBuchik[] {
   // 공포일자·내용이 있는 부칙만, 공포일자 내림차순 정렬
   const sortedDesc = addenda
     .filter((b) => b.부칙공포일자 && b.부칙내용 != null)
-    .sort((a, b) => (b.부칙공포일자 ?? '').localeCompare(a.부칙공포일자 ?? ''))
+    .sort((a, b) => {
+      const byPromulgationDate = (b.부칙공포일자 ?? '').localeCompare(a.부칙공포일자 ?? '')
+      if (byPromulgationDate !== 0) return byPromulgationDate
+      return addendaTieKey(b).localeCompare(addendaTieKey(a), 'ko-KR', { numeric: true })
+    })
 
   if (!targetDate) return sortedDesc.slice(0, 2) // 최신 2개
 
@@ -354,17 +362,29 @@ function selectRelevantAddenda(addenda: RawBuchik[], targetDate?: Date): RawBuch
  * content는 원문 그대로 결합(flattenText)하며 의역·요약하지 않는다 (CLAUDE.md §6.1).
  * 식별자(articleNumber)는 부칙내용 첫 줄("부칙 <제○호,날짜>")을 사용한다.
  */
-function buchikToTaxLaw(
+function buildAddendaArticleNumber(buchik: RawBuchik, content: string, promulgationDate: string): string {
+  const firstLine = content.split('\n')[0]?.trim() ?? ''
+  if (firstLine.startsWith('부칙')) return firstLine
+
+  const parts: string[] = []
+  const promulgationNumber = buchik.부칙공포번호?.trim()
+  const buchikKey = buchik.부칙키?.trim()
+
+  if (promulgationNumber) parts.push(`제${promulgationNumber}호`)
+  if (promulgationDate) parts.push(promulgationDate)
+  if (!promulgationNumber && buchikKey) parts.push(buchikKey)
+
+  return parts.length > 0 ? `부칙 <${parts.join(', ')}>` : '부칙'
+}
+
+export function buchikToTaxLaw(
   buchik: RawBuchik,
   lawName: string,
   lsiSeq: string,
 ): TaxLaw {
   const content = flattenText(buchik.부칙내용)
   const promulgationDate = toIsoDate(buchik.부칙공포일자 ?? '')
-  const firstLine = content.split('\n')[0]?.trim() ?? ''
-  const articleNumber = firstLine.startsWith('부칙')
-    ? firstLine
-    : `부칙 <제${buchik.부칙공포번호 ?? ''}호>`
+  const articleNumber = buildAddendaArticleNumber(buchik, content, promulgationDate)
   return {
     sourceType: '법령',
     lawName: `${lawName} 부칙`,
@@ -731,12 +751,12 @@ export class NationalTaxLawAdapter implements ISearchPort {
 
     // TAX-6B-1 FR-17: 시점 관련 부칙·경과조치를 T2로 병합 (신·구법 적용 경계 명시).
     //   법령 단위 맥락이므로 조문번호 힌트 필터와 무관하게 첨부하고, 시점 선별만 적용한다.
-    //   sortTaxLaws가 T1 조문 → T2 부칙 순으로 정렬하여 직접 근거를 우선 노출한다.
+    //   T1 조문 블록과 T2 부칙 블록을 따로 정렬한 뒤 이어 붙여 직접 근거를 우선 노출한다.
     const addendaItems = selectRelevantAddenda(addenda, targetDate).map((b) =>
       buchikToTaxLaw(b, lawName, topLaw.법령일련번호),
     )
 
-    const merged = sortTaxLaws([...filtered, ...addendaItems])
+    const merged = [...sortTaxLaws(filtered), ...sortTaxLaws(addendaItems)]
     return {
       items: merged,
       totalCount: merged.length,
