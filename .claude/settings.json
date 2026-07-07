@@ -44,6 +44,14 @@
     "law-verifier": {
       "model": "claude-opus-4-7",
       "description": "환각 검증 critical — 정확도 최우선"
+    },
+    "code-evaluator": {
+      "model": "opus",
+      "description": "코드 리뷰 하네스 평가자 — 결함 진단·Codex 지시서 작성, 판단 정확도 필요"
+    },
+    "quality-gate": {
+      "model": "sonnet",
+      "description": "코드 리뷰 하네스 품질 테스터 — 기계 게이트가 뒷받침, 비용 효율"
     }
   },
   "hooks": {
@@ -54,6 +62,19 @@
           {
             "type": "command",
             "command": "node scripts/check-pii.js"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/check-roadmap-sync.js"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/check-review-pending.js"
           }
         ]
       }
