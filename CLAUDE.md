@@ -1,4 +1,4 @@
-# CLAUDE.md — 세법 API 검색 시스템 (v2.0)
+# CLAUDE.md — 세법 API 검색 시스템 (v2.1)
 
 > 이 파일은 AI(Claude Code, Cursor, ChatGPT 등)가 이 프로젝트에서 작업할 때
 > **가장 먼저 읽어야 하는 1페이지 행동 지침**입니다.
@@ -7,6 +7,7 @@
 > 충돌 시 상위 문서가 우선합니다.
 >
 > 갱신: 2026-06-08 — §9 8번 보강(승인 요청 시 선택지 장단점 한 줄 설명 의무화, 메모리 feedback_explain_before_decision.md와 정합)
+> 갱신: 2026-07-06 — §9 9번·§10·§11 보강(ROADMAP.md §3 갱신을 리포트와 동시 필수화, `scripts/check-roadmap-sync.js` 훅 신설, PRD.md는 `/sync-docs` 스킬로 주기적 일괄 정합 — TAX-6B-9~37 장기 미반영 사고 재발 방지)
 
 ---
 
@@ -215,7 +216,7 @@ UI (app/)  →  API Route (app/api/)  →  Usecase (src/usecases/)  →  Adapter
 8. **계획 먼저** — 코딩 전 근본 원인·영향 파일·구현 계획 제시 후 인간 승인.
    - **승인 요청 시 선택지가 2개 이상이면 각 방안의 장점·단점을 한 줄씩 쉽고 명확하게 설명할 것** (비유·표 활용 권장, 추천안은 첫 번째에 배치)
    - 회계사 결정 부담을 줄이기 위함 — 참조: 메모리 `feedback_explain_before_decision.md`
-9. **리포트 작성** — 구현 후 `docs/reports/`에 리포트 필수
+9. **리포트 작성** — 구현 후 `docs/reports/`에 리포트 필수 + **같은 커밋에 `ROADMAP.md` §3 현재 상태 표 갱신 필수** (2026-07-06: TAX-6B-9~37 28개 티켓이 장기간 미반영된 사고 재발 방지, `scripts/check-roadmap-sync.js` 훅으로 기계적 경고). `PRD.md`는 새 FR 신설 여부 등 판단이 필요하므로 매 티켓 자동 갱신 대상이 아니며, `/sync-docs` 스킬로 여러 티켓을 주기적으로 일괄 정합한다 (§10 참조).
 10. **불확실하면 STOP & ASK** — 추측·임의 판단 금지, 반드시 질문
 
 ---
@@ -242,7 +243,12 @@ UI (app/)  →  API Route (app/api/)  →  Usecase (src/usecases/)  →  Adapter
 - [예상 위험요소]
 
 **리포트:** docs/reports/TAX-XXX_report.md
+**ROADMAP.md:** §3 현재 상태 표에 이 티켓 반영 완료 (같은 커밋)
 ```
+
+> **문서 동기화 정책 (v2.1, 2026-07-06 신설):**
+> - **ROADMAP.md** — 티켓 완료마다 위 형식대로 §3 현재 상태 표를 즉시 갱신한다(기계적 반영, 판단 불필요). `git commit` 직전 `scripts/check-roadmap-sync.js`(PreToolUse 훅)가 `docs/reports/` 변경만 있고 `ROADMAP.md` 변경이 없으면 경고한다(차단하지 않음).
+> - **PRD.md** — "새 FR을 신설할 만한 변경인가"는 판단이 필요해 매 티켓 자동화하지 않는다. 티켓 여러 건이 누적되면 `/sync-docs` 스킬(`.claude/skills/sync-docs/`)을 실행해 `prd-writer` 서브에이전트(Opus)로 일괄 정합한다.
 
 ---
 
@@ -256,6 +262,7 @@ UI (app/)  →  API Route (app/api/)  →  Usecase (src/usecases/)  →  Adapter
 - 인용 발췌가 원문과 일치하는가? → 정규화 후 문자 단위 비교 (§6.1)
 - 시점 라벨을 부착했는가? → 모든 답변 필수 (§6.2)
 - 회계사 승인이 필요한가? → 선택지 2개 이상이면 각 방안 장단점 한 줄씩 설명 (§9 8번)
+- 티켓을 완료했는가? → 리포트와 함께 `ROADMAP.md` §3 갱신 필수, 여러 티켓 누적 시 `/sync-docs`로 PRD.md도 점검 (§9 9번, §10)
 
 ---
 
