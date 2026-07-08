@@ -65,14 +65,29 @@ const FINAL_PATH = join('scripts', 'ntsExpc_full.json')
 
 /** 목록 1페이지 건수 — API 최대 100 */
 const LIST_DISPLAY = 100
-/** 본문 동시 조회 수 — taxlaw 응답이 판례 대비 무거워(관련 목록 포함 ~수백KB) 보수적 기본 5 */
-const DEFAULT_CONCURRENCY = 5
+/**
+ * 본문 동시 조회 수 — 보수적 기본 2(매너 크롤링).
+ * taxlaw는 비공식 내부 엔드포인트라 자동화 대량 요청 방어(WAF)가 공격적이다.
+ * 실측(--max 200): 동시성 5·무지연으로 약 124건 연속 요청 후 우리 IP가 L7 침묵 차단됨.
+ * → 동시성 하향 + 요청 간 지연(REQUEST_DELAY_MS) + User-Agent + 조기 중단으로 재발 방지.
+ */
+const DEFAULT_CONCURRENCY = 2
+/** 요청 사이 최소 지연(ms) — 매너 크롤링. 각 워커가 1건 처리 후 이만큼 쉰다. */
+const REQUEST_DELAY_MS = 500
+/** 연속 실패 임계 — 이만큼 연속 실패하면 차단(rate-limit) 의심으로 즉시 중단(차단 연장 방지) */
+const CONSECUTIVE_FAIL_LIMIT = 10
+/** 봇 오탐 완화용 User-Agent(일반 브라우저 형태) — taxlaw WAF 봇 감지 회피 */
+const USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36'
 /** 단건 재시도 횟수(지수 백오프) */
 const MAX_RETRY = 4
 /** 단건 타임아웃(ms) — taxlaw 응답 용량을 감안해 심판례(15s)보다 여유 있게 */
 const TIMEOUT_MS = 20000
 /** records.jsonl 진행 로그·체크포인트 저장 간격(건) */
 const CHECKPOINT_EVERY = 500
+
+/** 지정 ms만큼 대기(매너 크롤링·백오프 공용 헬퍼) */
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
 // ─── 순수 함수 (단위 테스트 대상 — 파일시스템·네트워크 비의존) ──────────────────
 //   ⚠️ 어댑터(nationalTaxLaw.ts)의 목록 매핑과 동일한 데이터 형태를 유지한다(실시간 경로와 정합).
@@ -231,6 +246,7 @@ export async function fetchTaxlawAction(ntstDcmId: string): Promise<unknown> {
             origin: 'https://taxlaw.nts.go.kr',
             referer: taxlawReferer(ntstDcmId),
             'x-requested-with': 'XMLHttpRequest',
+            'user-agent': USER_AGENT, // 봇 오탐 완화(§7 매너 크롤링)
           },
           body: body.toString(),
           signal: controller.signal,
@@ -246,8 +262,7 @@ export async function fetchTaxlawAction(ntstDcmId: string): Promise<unknown> {
     } catch (e) {
       lastErr = e
       if (attempt < MAX_RETRY) {
-        const backoff = 500 * 2 ** attempt // 0.5s, 1s, 2s, 4s
-        await new Promise((r) => setTimeout(r, backoff))
+        await sleep(500 * 2 ** attempt) // 0.5s, 1s, 2s, 4s
       }
     }
   }
@@ -324,18 +339,31 @@ async function collectBodies(list: NtsExpcListItem[], concurrency: number, max: 
   let empty = 0
   let fail = 0
   let processed = 0
+  let consecutiveFail = 0 // 연속 실패 카운터(성공하면 0으로 리셋) — 차단 조기 감지용
+  let aborted = false // 조기 중단(circuit breaker) 발동 여부
   const startedAt = Date.now()
 
   await runPool(remaining, concurrency, async (item) => {
+    if (aborted) return // 조기 중단 발동 후 남은 작업은 즉시 스킵(요청 없이 빠르게 소진)
     try {
       const content = parseActionBody(await fetchTaxlawAction(item.ntstDcmId))
       const law = mapNtsExpcToTaxLaw(item, content)
       appendFileSync(RECORDS_PATH, JSON.stringify({ ntstDcmId: item.ntstDcmId, law }) + '\n', 'utf-8')
       if (content) ok++
       else empty++ // 본문 미제공/빈 문서 — 참고 목록 후보로 활용. 적재는 content 보유분만(embed.ts).
+      consecutiveFail = 0 // 성공하면 연속 실패 리셋
     } catch (e) {
       fail++
+      consecutiveFail++
       console.error(`  [본문 실패] ntstDcmId=${item.ntstDcmId} caseNo=${item.caseNumber}: ${scrubOc(String(e))}`)
+      // circuit breaker: 연속 N건 실패면 차단(rate-limit) 의심 → 즉시 중단(차단 연장·헛수고 방지)
+      if (consecutiveFail >= CONSECUTIVE_FAIL_LIMIT && !aborted) {
+        aborted = true
+        console.error(
+          `  ⛔ 연속 ${CONSECUTIVE_FAIL_LIMIT}건 실패 — 서버 차단(rate-limit) 의심으로 즉시 중단합니다. ` +
+          `잠시(수십 분~수 시간) 뒤 재실행하면 records.jsonl 기준으로 이어받습니다.`,
+        )
+      }
     } finally {
       processed++
       if (processed % CHECKPOINT_EVERY === 0) {
@@ -343,12 +371,16 @@ async function collectBodies(list: NtsExpcListItem[], concurrency: number, max: 
         const rate = processed / ((Date.now() - startedAt) / 1000)
         console.log(`  진행 ${processed}/${remaining.length} (성공 ${ok}·빈본문 ${empty}·실패 ${fail}, ${rate.toFixed(1)}건/s)`)
       }
+      // 매너 크롤링: 각 요청 후 지연(중단 상태면 생략해 남은 워커를 빠르게 소진)
+      if (!aborted) await sleep(REQUEST_DELAY_MS)
     }
   })
 
   writeCheckpoint(list.length, done.size + processed, { ok, empty, fail })
   console.log(`[2단계] 완료: 성공 ${ok}·빈본문 ${empty}·실패 ${fail} (누적 완료 ${done.size + processed}/${list.length})`)
-  if (fail > 0) {
+  if (aborted) {
+    console.log('  ⛔ 연속 실패로 조기 중단되었습니다. 서버 차단(rate-limit) 해제 후 재실행하세요(이어받기 지원).')
+  } else if (fail > 0) {
     console.log(`  ⚠️ 실패 ${fail}건 — 재실행하면 미완료 ntstDcmId만 이어받습니다(records.jsonl 기준).`)
   }
 }
