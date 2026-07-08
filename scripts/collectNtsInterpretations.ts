@@ -11,12 +11,16 @@
  *   유일한 실사용 경로다. 향후 권한이 열리면 [2단계 본문]만 lawService.do(XML)로 교체하면
  *   되도록 fetchTaxlawAction/parseActionBody를 국소 함수로 분리해 두었다(§8).
  *
- * ⚠️ §4.3 저장 형태 결정(방안① 채택 — 평문 필드만): dcmDVO의 ntstDcmGistCntn(요지)+
- *   ntstDcmCntn(회신)만 저장한다. 둘 다 이미 평문이라 HTML 가공(§6.1 왜곡 리스크)이 0이다.
- *   HWP 전문(dcmHwpEditorDVOList)은 이번 단계에서 포함하지 않는다 — 회계사가 검증 §6-4
- *   단계(본문 샘플 육안 대조)에서 정보량이 부족하다고 판단하면 방안②(HWP 포함)로 승격한다.
- *   해석례는 참고 목록(references) 트랙이라 발췌 인용되지 않으므로(§4.3) 이 결정은
- *   "왜곡 없는 저장"의 문제이지 "문자 단위 인용"의 문제가 아니다.
+ * ⚠️ §4.3 저장 형태 결정(방안② 채택 — 평문 + HWP 전문): dcmDVO의 ntstDcmGistCntn(요지)+
+ *   ntstDcmCntn(회신)에 더해, HWP 첨부 전문(dcmHwpEditorDVOList의 html 변환본)까지 결합해
+ *   저장한다. HWP 전문에는 '○ 사실관계'·'관련 조세법령(조문 원문)'·다른 세법해석례(관련사례)
+ *   인용이 함께 담겨 있어(2026-07-09 실측), 이 한 번의 결합으로 사실관계·관련법령·관련사례를
+ *   모두 확보한다(회계사 결정 2026-07-09). 본문이 풍부해져 의미 검색에서 관련 해석례가
+ *   자연스럽게 함께 노출되는 부수 효과도 있다. 관련사례를 '명시적 엣지'로 잇는 인용 그래프
+ *   (판례·심판례 방식, TAX-6B-31/32)는 범위가 커 후속 티켓으로 분리한다.
+ *   해석례는 참고 목록(references) 트랙이라 발췌 인용되지 않으므로(§4.3·§6.4) 이 저장은
+ *   "문자 단위 인용"이 아니라 "왜곡 없는 저장"의 문제다. HTML→텍스트 변환(htmlToText)은 태그만
+ *   제거하고 실제 텍스트·HWP 특수문자(󰡒󰡓·【】)는 원문 그대로 보존한다(§6.1 왜곡 방지).
  *
  * ⚠️ 인용 무결성(CLAUDE.md §6.1): content(요지+회신)는 원문 그대로 보존. 가공·요약 금지.
  * ⚠️ 키 보호(CLAUDE.md §7): OC(API키)는 목록 조회에만 쓰이고 taxlaw 크롤링엔 아예 없다.
@@ -69,13 +73,27 @@ const LIST_DISPLAY = 100
  * 본문 동시 조회 수 — 보수적 기본 2(매너 크롤링).
  * taxlaw는 비공식 내부 엔드포인트라 자동화 대량 요청 방어(WAF)가 공격적이다.
  * 실측(--max 200): 동시성 5·무지연으로 약 124건 연속 요청 후 우리 IP가 L7 침묵 차단됨.
- * → 동시성 하향 + 요청 간 지연(REQUEST_DELAY_MS) + User-Agent + 조기 중단으로 재발 방지.
+ * → 동시성 하향 + 요청 간 랜덤 지터 지연 + User-Agent + 완충 쿨다운·조기 중단으로 재발 방지.
  */
 const DEFAULT_CONCURRENCY = 2
-/** 요청 사이 최소 지연(ms) — 매너 크롤링. 각 워커가 1건 처리 후 이만큼 쉰다. */
-const REQUEST_DELAY_MS = 500
+/**
+ * 요청 사이 지연(ms) — 매너 크롤링. 고정 간격 요청은 봇으로 탐지되기 쉬우므로(참고: 크롤링 IP
+ * 차단 예방 자료 — "기계처럼 정확한 타이밍·간격이면 Bot으로 인식") 최소~최대 사이 랜덤 지터를
+ * 준다. 각 워커가 1건 처리 후 이 범위에서 무작위 시간만큼 쉰다(jitterDelayMs).
+ */
+const REQUEST_DELAY_MIN_MS = 500
+const REQUEST_DELAY_MAX_MS = 1500
 /** 연속 실패 임계 — 이만큼 연속 실패하면 차단(rate-limit) 의심으로 즉시 중단(차단 연장 방지) */
 const CONSECUTIVE_FAIL_LIMIT = 10
+/**
+ * 즉시 중단 전 1차 완충 임계 — 연속 실패가 이 값에 이르면 곧장 포기하지 않고 모든 워커가 잠시
+ * 멈춰(COOLDOWN_MS) 서버에 회복 시간을 준다. 일시적 rate-limit이면 스스로 회복하고, 그래도
+ * 실패가 이어져 CONSECUTIVE_FAIL_LIMIT에 닿으면 그때 즉시 중단한다(참고: 크롤링 차단 예방 —
+ * "일정 시간 대기 후 다시 요청").
+ */
+const COOLDOWN_FAIL_THRESHOLD = 3
+/** 1차 완충 쿨다운(ms) — 이 시간 동안 모든 워커가 새 요청을 보류한다 */
+const COOLDOWN_MS = 30_000
 /** 봇 오탐 완화용 User-Agent(일반 브라우저 형태) — taxlaw WAF 봇 감지 회피 */
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36'
@@ -101,6 +119,22 @@ export interface NtsExpcListItem {
   decidedAt: string  // 해석일자(원본 "YYYY.MM.DD")
   detailLink: string // 법령해석상세링크 — taxlaw 공개 뷰어 링크(ntstDcmId 포함, OC 키 없음)
   ntstDcmId: string  // detailLink에서 추출한 taxlaw 크롤링용 ID(18자리)
+}
+
+/**
+ * 요청 간 지연 시간을 [min, max] 사이 무작위 정수(ms)로 계산한다(매너 크롤링·봇 오탐 완화).
+ * 고정 간격 요청은 자동화 봇으로 탐지되기 쉬우므로(참고: 크롤링 IP 차단 예방 자료 —
+ * "기계처럼 정확한 타이밍·간격이면 Bot으로 인식") 사람이 조작하듯 간격을 불규칙하게 둔다.
+ * rnd는 [0,1) 난수원(기본 Math.random) — 주입 가능하게 열어 결정적 단위 테스트를 지원한다.
+ */
+export function jitterDelayMs(
+  min: number = REQUEST_DELAY_MIN_MS,
+  max: number = REQUEST_DELAY_MAX_MS,
+  rnd: () => number = Math.random,
+): number {
+  const lo = Math.max(0, Math.min(min, max))
+  const hi = Math.max(lo, Math.max(min, max))
+  return lo + Math.floor(rnd() * (hi - lo + 1))
 }
 
 /** 법령해석상세링크에서 taxlaw 크롤링용 ntstDcmId를 추출한다(§2.2, 프로브 실측 확인). */
@@ -138,23 +172,95 @@ export function hasSubstantiveTaxlawBody(text: string): boolean {
   return !/(내용없음|본문없음|조회된내용이없습니다|자료가없습니다)/.test(compact)
 }
 
+/** 코드포인트 → 문자(범위 밖·비정상 값은 빈 문자열로 안전 처리) — htmlToText 숫자 엔티티 복원용 */
+function codePointSafe(cp: number): string {
+  if (!Number.isFinite(cp) || cp < 0 || cp > 0x10ffff) return ''
+  try {
+    return String.fromCodePoint(cp)
+  } catch {
+    return ''
+  }
+}
+
 /**
- * action.do 응답(JSON) → content. §4.3 방안①: 요지(ntstDcmGistCntn)+회신(ntstDcmCntn)을
- * 원문 그대로 결합한다(§6.1). 두 필드가 완전히 같으면 중복 결합하지 않는다(공식 API의
- * 회답==질의요지 중복 사례가 있어 방어적으로 적용 — memory project_nonlaw_interp_tracks 참고).
- * hasSubstantiveTaxlawBody를 통과하지 못하면 빈 문자열(참고 목록 후보로만 활용).
+ * HWP 첨부 전문(HTML)을 텍스트로 충실 변환한다(§4.3 방안②).
+ * - 블록/줄바꿈 태그(<br>·</p>·</tr>·</li>·</h1~6> 등)는 개행으로 보존해 문단 구조를 유지한다.
+ * - 표 셀 경계(</td>·</th>)는 공백으로 보존한다(열이 붙어버리는 것 방지).
+ * - 나머지 태그는 제거하고, HTML 엔티티를 복원한다(&amp;는 이중 복원 방지 위해 마지막).
+ * - HWP 특수문자(󰡒 󰡓 인용부호·【】 등)는 손대지 않고 원문 그대로 둔다(§6.1 왜곡 방지).
+ * - 마크업에서 비롯된 잉여 공백/개행만 정리한다(실제 텍스트 내용은 변형하지 않음).
+ * ⚠️ 해석례는 참고 목록(references) 트랙이라 발췌 "인용" 대상이 아니므로(§6.4) 문자 단위 인용이
+ *    아닌 "왜곡 없는 저장"의 관점에서 보수적으로 변환한다.
+ */
+export function htmlToText(html: string): string {
+  const raw = String(html ?? '')
+  if (!raw.trim()) return ''
+  return raw
+    .replace(/<\s*br\s*\/?\s*>/gi, '\n') // 줄바꿈 태그 → 개행
+    .replace(/<\/\s*(p|div|tr|li|h[1-6]|table|thead|tbody|caption|blockquote)\s*>/gi, '\n') // 블록 종료 → 개행
+    .replace(/<\/\s*(td|th)\s*>/gi, ' ') // 표 셀 경계 → 공백
+    .replace(/<[^>]+>/g, '') // 나머지 태그 제거
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/gi, "'")
+    .replace(/&#(\d+);/g, (_, n: string) => codePointSafe(Number(n))) // 10진 숫자 엔티티
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, n: string) => codePointSafe(parseInt(n, 16))) // 16진 숫자 엔티티
+    .replace(/&amp;/gi, '&') // 반드시 마지막(이중 복원 방지)
+    .replace(/[ \t ]+/g, ' ') // 연속 공백(nbsp 포함) → 단일 공백
+    .split('\n')
+    .map((line) => line.trim()) // 각 줄 앞뒤 공백 제거(마크업 들여쓰기 제거)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n') // 3줄 이상 빈 줄 → 2줄
+    .trim()
+}
+
+/**
+ * dcmHwpEditorDVOList에서 HTML 전문 항목만 골라 텍스트로 결합한다(§4.3 방안②).
+ * 실측(2026-07-09): 목록에 HWP 원본(dcmFleTy='hwp', 내용 비어 있음)과 변환본(dcmFleTy='html')이
+ * 함께 온다. 내용 있는 HTML 항목만 취해 htmlToText로 변환한다(빈 항목·HWP 바이너리 제외).
+ */
+export function extractHwpFullText(list: unknown): string {
+  if (!Array.isArray(list)) return ''
+  const texts: string[] = []
+  for (const item of list) {
+    const it = (item ?? {}) as Record<string, unknown>
+    const byte = String(it['dcmFleByte'] ?? '')
+    if (!byte.trim()) continue // 빈 항목(HWP 원본은 대개 여기서 걸러짐) 제외
+    const ty = String(it['dcmFleTy'] ?? '').toLowerCase()
+    const looksHtml = /<\/?[a-z][\s\S]*>/i.test(byte)
+    // dcmFleTy가 'html'이거나, 타입 표기가 없어도 HTML 태그가 보이면 채택('hwp' 바이너리는 제외)
+    if (ty === 'html' || (ty !== 'hwp' && looksHtml)) {
+      const text = htmlToText(byte)
+      if (text) texts.push(text)
+    }
+  }
+  return texts.join('\n\n').trim()
+}
+
+/**
+ * action.do 응답(JSON) → content. §4.3 방안②: 요지(ntstDcmGistCntn)+회신(ntstDcmCntn)에 더해
+ * HWP 첨부 전문(사실관계·관련법령·관련사례 포함)까지 원문 그대로 결합한다(§6.1).
+ * 요지·회신 두 필드가 완전히 같으면 중복 결합하지 않는다(공식 API의 회답==질의요지 중복 사례가
+ * 있어 방어적으로 적용 — memory project_nonlaw_interp_tracks 참고). HWP 전문이 없는 옛 문서는
+ * 요지+회신만 저장한다(하위 호환). hasSubstantiveTaxlawBody를 통과하지 못하면 빈 문자열.
  */
 export function parseActionBody(json: unknown): string {
-  const data = (json as { data?: Record<string, unknown> }).data
-  const dcm = (data?.[ACTION_ID] as { dcmDVO?: Record<string, unknown> } | undefined)?.dcmDVO
+  const payload = (json as { data?: Record<string, unknown> }).data?.[ACTION_ID] as
+    | { dcmDVO?: Record<string, unknown>; dcmHwpEditorDVOList?: unknown }
+    | undefined
+  const dcm = payload?.dcmDVO
   if (!dcm) return ''
   // ⚠️ §6.1 원문 그대로: 중복 판정에만 trim 비교를 쓰고, 결합 자체는 필드 원문(내부 공백 포함)을
   //   그대로 두고 마지막에만 전체 trim한다(collectTribunal.parseBody와 동일 관례).
   const gist = String(dcm['ntstDcmGistCntn'] ?? '')
   const cntn = String(dcm['ntstDcmCntn'] ?? '')
   const isDuplicate = cntn.trim() !== '' && cntn.trim() === gist.trim()
-  const parts = isDuplicate ? [gist] : [gist, cntn]
-  const combined = parts.filter(Boolean).join('\n').trim()
+  const head = (isDuplicate ? [gist] : [gist, cntn]).filter(Boolean).join('\n') // 기존 요지+회신 결합 관례 유지
+  const hwpText = extractHwpFullText(payload?.dcmHwpEditorDVOList) // 방안②: HWP 전문 추가
+  const combined = [head, hwpText].filter((s) => s.trim()).join('\n\n').trim()
   return hasSubstantiveTaxlawBody(combined) ? combined : ''
 }
 
@@ -262,7 +368,8 @@ export async function fetchTaxlawAction(ntstDcmId: string): Promise<unknown> {
     } catch (e) {
       lastErr = e
       if (attempt < MAX_RETRY) {
-        await sleep(500 * 2 ** attempt) // 0.5s, 1s, 2s, 4s
+        // 지수 백오프 + 지터(동시 재시도가 한꺼번에 몰리지 않도록 분산 — 참고: 크롤링 차단 예방)
+        await sleep(500 * 2 ** attempt + Math.floor(Math.random() * 500))
       }
     }
   }
@@ -341,10 +448,14 @@ async function collectBodies(list: NtsExpcListItem[], concurrency: number, max: 
   let processed = 0
   let consecutiveFail = 0 // 연속 실패 카운터(성공하면 0으로 리셋) — 차단 조기 감지용
   let aborted = false // 조기 중단(circuit breaker) 발동 여부
+  let cooldownUntil = 0 // 이 시각(epoch ms)까지 모든 워커가 새 요청을 보류(공유 완충 쿨다운)
   const startedAt = Date.now()
 
   await runPool(remaining, concurrency, async (item) => {
     if (aborted) return // 조기 중단 발동 후 남은 작업은 즉시 스킵(요청 없이 빠르게 소진)
+    // 공유 완충 쿨다운: rate-limit 완충 시간 동안 모든 워커가 새 요청을 멈춘다
+    const cooldownWait = cooldownUntil - Date.now()
+    if (cooldownWait > 0) await sleep(cooldownWait)
     try {
       const content = parseActionBody(await fetchTaxlawAction(item.ntstDcmId))
       const law = mapNtsExpcToTaxLaw(item, content)
@@ -356,6 +467,17 @@ async function collectBodies(list: NtsExpcListItem[], concurrency: number, max: 
       fail++
       consecutiveFail++
       console.error(`  [본문 실패] ntstDcmId=${item.ntstDcmId} caseNo=${item.caseNumber}: ${scrubOc(String(e))}`)
+      // 1차 완충: 연속 실패가 임계에 닿으면 곧장 포기하지 않고 모든 워커가 잠시 쉰다(일시적 rate-limit 회복 유도)
+      if (
+        consecutiveFail >= COOLDOWN_FAIL_THRESHOLD &&
+        consecutiveFail < CONSECUTIVE_FAIL_LIMIT &&
+        Date.now() >= cooldownUntil
+      ) {
+        cooldownUntil = Date.now() + COOLDOWN_MS
+        console.error(
+          `  ⏸ 연속 ${consecutiveFail}건 실패 — ${COOLDOWN_MS / 1000}s 쿨다운 후 재개합니다(일시적 rate-limit 완충).`,
+        )
+      }
       // circuit breaker: 연속 N건 실패면 차단(rate-limit) 의심 → 즉시 중단(차단 연장·헛수고 방지)
       if (consecutiveFail >= CONSECUTIVE_FAIL_LIMIT && !aborted) {
         aborted = true
@@ -371,8 +493,8 @@ async function collectBodies(list: NtsExpcListItem[], concurrency: number, max: 
         const rate = processed / ((Date.now() - startedAt) / 1000)
         console.log(`  진행 ${processed}/${remaining.length} (성공 ${ok}·빈본문 ${empty}·실패 ${fail}, ${rate.toFixed(1)}건/s)`)
       }
-      // 매너 크롤링: 각 요청 후 지연(중단 상태면 생략해 남은 워커를 빠르게 소진)
-      if (!aborted) await sleep(REQUEST_DELAY_MS)
+      // 매너 크롤링: 각 요청 후 랜덤 지터 지연(중단 상태면 생략해 남은 워커를 빠르게 소진)
+      if (!aborted) await sleep(jitterDelayMs())
     }
   })
 
