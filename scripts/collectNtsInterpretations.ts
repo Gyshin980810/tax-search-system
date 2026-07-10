@@ -42,12 +42,23 @@
  *   npm run collect:nts-interp -- --concurrency 5
  *   npm run collect:nts-interp -- --max 200    → 테스트용 상한(앞 N건만 본문 수집)
  *   npm run collect:nts-interp -- --allow-duplicate-case
- *     → 안건번호 중복 리포트만 남기고 finalize 강행(기본값은 중복 발견 시 중단)
+ *     → 안건번호 "누락"이 있어도 finalize 강행(기본값은 누락 발견 시 중단).
+ *       안건번호 "중복"은 기본 정보용 리포트만 남기고 항상 진행됨(2026-07-10, §3단계 finalize 참고 —
+ *       2004년 이전 해석례가 caseNumber에 세목명만 채운 경우의 정상적 데이터 특성이라 차단 대상 아님).
  *
  * ⚠️ 이 스크립트는 실행 시 실제 외부 API(목록)와 taxlaw.nts.go.kr(본문)를 호출한다.
  *    착수 승인 전에는 실행하지 말 것. 대량 수집 시 §7(매너 크롤링)을 반드시 준수한다.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  appendFileSync,
+  createReadStream,
+  createWriteStream,
+} from 'node:fs'
+import { createInterface } from 'node:readline'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { TaxLaw } from '../src/domain/TaxLaw'
@@ -299,6 +310,7 @@ export function mapNtsExpcToTaxLaw(item: NtsExpcListItem, content: string): TaxL
     caseNumber: caseNo,
     issuingBody,
     decisionDate,
+    externalId: item.ntstDcmId, // caseNumber가 신뢰 불가한 옛 문서의 진짜 유일 식별자(TaxLaw.externalId 참고)
   }
 }
 
@@ -414,12 +426,16 @@ async function collectList(oc: string): Promise<NtsExpcListItem[]> {
 
 // ─── 2단계: 본문 수집(resume) ──────────────────────────────────────────────────
 
-/** records.jsonl에서 이미 완료된 ntstDcmId 집합을 복원(재개 안전) */
-function loadDoneIds(): Set<string> {
+/**
+ * records.jsonl에서 이미 완료된 ntstDcmId 집합을 복원(재개 안전).
+ * ⚠️ 파일이 커지면(HWP 전문 포함 후 수백MB) readFileSync 통짜 읽기는 Node/V8 문자열 길이
+ *    한계(536,870,888자)를 넘어 크래시한다(collectTribunal.ts:479 동일 사례) — 줄 단위 스트리밍.
+ */
+async function loadDoneIds(): Promise<Set<string>> {
   const done = new Set<string>()
   if (!existsSync(RECORDS_PATH)) return done
-  const text = readFileSync(RECORDS_PATH, 'utf-8')
-  for (const line of text.split('\n')) {
+  const rl = createInterface({ input: createReadStream(RECORDS_PATH, 'utf-8'), crlfDelay: Infinity })
+  for await (const line of rl) {
     const t = line.trim()
     if (!t) continue
     try {
@@ -434,7 +450,7 @@ function loadDoneIds(): Set<string> {
 
 async function collectBodies(list: NtsExpcListItem[], concurrency: number, max: number): Promise<void> {
   ensureOutDir()
-  const done = loadDoneIds()
+  const done = await loadDoneIds()
   let remaining = list.filter((it) => !done.has(it.ntstDcmId))
   if (max > 0) remaining = remaining.slice(0, max)
 
@@ -518,21 +534,32 @@ function writeCheckpoint(total: number, completed: number, stat: { ok: number; e
 
 // ─── 3단계: finalize (records.jsonl → ntsExpc_full.json) ───────────────────────
 
-function finalize(allowDuplicateCase = false): void {
+/**
+ * 3단계 finalize. records.jsonl(HWP 전문 포함, 수백MB~1GB대)을 다룬다.
+ * ⚠️ readFileSync 통짜 읽기·JSON.stringify(laws) 통짜 쓰기 둘 다 Node/V8 문자열 길이 한계
+ *    (536,870,888자)를 넘어 크래시했다(2026-07-10 실측: 673MB records.jsonl에서 재현).
+ *    읽기는 줄 단위 스트리밍으로, 쓰기는 `[`/한 줄 1객체(,)/`]` 형식으로 바꿔 문제를 원천 차단한다.
+ *    이 출력 형식은 embed.ts의 대용량(≥0.5GiB) 스트리밍 입력 파서(parseArrayLine)가
+ *    이미 지원하는 형식과 정확히 일치한다(embed.ts:9-12 문서, collectTribunal.ts 산출물 형식).
+ */
+async function finalize(allowDuplicateCase = false): Promise<void> {
   if (!existsSync(RECORDS_PATH)) {
     console.error(`[3단계] records.jsonl 이 없습니다(${RECORDS_PATH}). 먼저 2단계 본문 수집을 실행하세요.`)
     process.exit(1)
   }
-  const text = readFileSync(RECORDS_PATH, 'utf-8')
   const laws: TaxLaw[] = []
   const seen = new Set<string>() // ntstDcmId 중복 제거(append 재개 과정의 잠재 중복 방어)
-  for (const line of text.split('\n')) {
+  const rl = createInterface({ input: createReadStream(RECORDS_PATH, 'utf-8'), crlfDelay: Infinity })
+  for await (const line of rl) {
     const t = line.trim()
     if (!t) continue
     try {
       const rec = JSON.parse(t) as { ntstDcmId?: string; law?: TaxLaw }
       if (!rec.law || (rec.ntstDcmId && seen.has(rec.ntstDcmId))) continue
       if (rec.ntstDcmId) seen.add(rec.ntstDcmId)
+      // externalId 백필: mapNtsExpcToTaxLaw에 이 필드를 추가하기 전에 이미 수집된 records.jsonl
+      // (재수집 없이 재사용)에는 law.externalId가 없다. 바깥 래퍼의 ntstDcmId(항상 존재)로 채운다.
+      if (!rec.law.externalId && rec.ntstDcmId) rec.law.externalId = rec.ntstDcmId
       laws.push(rec.law)
     } catch {
       // 손상 줄 무시
@@ -540,7 +567,12 @@ function finalize(allowDuplicateCase = false): void {
   }
   const duplicates = findDuplicateCaseNumbers(laws)
   const missingCaseNumber = laws.filter((law) => !(law.caseNumber ?? '').trim()).length
-  if (duplicates.length > 0 || missingCaseNumber > 0) {
+  if (duplicates.length > 0) {
+    // ⚠️ 정보용 리포트일 뿐 차단하지 않는다(2026-07-10 실증·회계사 결정). 2004년 이전 세법해석례는
+    // 안건번호(caseNumber) 필드에 세목명만 채워진 경우가 있어(예: "재산" 82건) 서로 다른 문서가
+    // 같은 caseNumber를 공유한다 — 국세청 원본 데이터 특성이지 수집 버그가 아니다. 진짜 동일 문서
+    // 재수집(버그성 중복)은 위 read 루프의 ntstDcmId 기반 seen Set(=TaxLaw.externalId)이 이미
+    // 원천 차단하므로, caseNumber 중복 자체는 finalize를 막을 이유가 아니다.
     const report = {
       duplicateCount: duplicates.length,
       missingCaseNumber,
@@ -548,20 +580,46 @@ function finalize(allowDuplicateCase = false): void {
       generatedAt: new Date().toISOString(),
     }
     writeFileSync(DUPLICATE_CASE_REPORT_PATH, JSON.stringify(report, null, 2) + '\n', 'utf-8')
-    console.error(
-      `[3단계] 안건번호 품질 이슈: 중복 ${duplicates.length}종, 누락 ${missingCaseNumber}건 ` +
-      `(${DUPLICATE_CASE_REPORT_PATH})`,
+    console.log(
+      `[3단계] 안건번호 중복 ${duplicates.length}종 (정보용 리포트, 진행에 영향 없음 — ${DUPLICATE_CASE_REPORT_PATH})`,
     )
+  }
+  if (missingCaseNumber > 0) {
+    console.error(`[3단계] 안건번호 누락 ${missingCaseNumber}건 — 데이터 품질 확인이 필요합니다.`)
     if (!allowDuplicateCase) {
       console.error('[3단계] 기본값은 적재 전 중단입니다. 검토 후 강행하려면 --allow-duplicate-case 를 사용하세요.')
       process.exit(1)
     }
   }
   // ⚠️ embed.ts는 content 보유분만 적재하지만, 파일에는 빈 본문도 보존(참고 목록 후보·재현성).
-  writeFileSync(FINAL_PATH, JSON.stringify(laws, null, 2) + '\n', 'utf-8')
+  await writeLawsStreamed(laws)
   const withBody = laws.filter((l) => l.content.length > 0).length
   console.log(`[3단계] 완료: ${laws.length}건 → ${FINAL_PATH} (본문 보유 ${withBody}건)`)
   console.log(`다음 단계(추후, 별도 실행): npm run embed -- --input ${FINAL_PATH.replace(/\\/g, '/')}`)
+}
+
+/** laws 배열을 `[`/한 줄 1객체/`]` 형식으로 스트리밍 저장(하나의 거대 문자열을 만들지 않음) */
+async function writeLawsStreamed(laws: TaxLaw[]): Promise<void> {
+  const out = createWriteStream(FINAL_PATH, 'utf-8')
+  const done = new Promise<void>((resolve, reject) => {
+    out.on('finish', resolve)
+    out.on('error', reject)
+  })
+  // write()가 false를 반환하면(내부 버퍼 가득참) drain까지 대기 — 백프레셔 처리.
+  // 대기 없이 동기 루프로 밀어넣으면 파일 전체(~667MB)가 flush 전에 프로세스 메모리에 쌓인다.
+  // 스트림 에러 시 drain이 영원히 안 오므로 done(에러 시 reject)과 race로 멈춤을 방지한다.
+  const write = async (chunk: string): Promise<void> => {
+    if (out.write(chunk)) return
+    await Promise.race([new Promise<void>((resolve) => out.once('drain', resolve)), done])
+  }
+  await write('[\n')
+  for (let i = 0; i < laws.length; i++) {
+    const suffix = i < laws.length - 1 ? ',\n' : '\n'
+    await write(JSON.stringify(laws[i]) + suffix)
+  }
+  await write(']\n')
+  out.end()
+  await done
 }
 
 // ─── 메인 ───────────────────────────────────────────────────────────────────
@@ -582,7 +640,7 @@ async function main(): Promise<void> {
   const max = getNumArg('--max', 0)
 
   if (finalizeOnly) {
-    finalize(allowDuplicateCase)
+    await finalize(allowDuplicateCase)
     return
   }
 
@@ -596,7 +654,7 @@ async function main(): Promise<void> {
   await collectBodies(list, concurrency, max)
 
   if (max === 0) {
-    finalize(allowDuplicateCase)
+    await finalize(allowDuplicateCase)
   } else {
     console.log('[--max] 일부만 수집했습니다. 전량 완료 후 --finalize 로 ntsExpc_full.json 을 생성하세요.')
   }
