@@ -14,7 +14,7 @@
  * 동작:
  *   1. laws.json을 스트리밍으로 훑어 content 보유 항목 수 확인 + 비법령 caseNumber 품질 검사
  *   2. content_hash(SHA-256)로 이미 적재된 항목 스킵 (재실행 안전)
- *   3. voyage-4(1024차원)로 배치(20건) 임베딩 생성 즉시 적재 — 전체를 메모리에 올리지 않음
+ *   3. voyage-4(1024차원)로 문서 수·글자 수 예산 배치 임베딩 생성 즉시 적재 — 전체를 메모리에 올리지 않음
  *   4. pgvector taxlaw_embeddings 테이블에 upsert
  *
  * ⚠️ DB는 vector(1024) 스키마여야 함. 1536(OpenAI) 스키마에 적재하면 차원 불일치 오류.
@@ -35,21 +35,35 @@ const CASE_ISSUE_REPORT_PATH = 'scripts/embed_case_number_issues.json'
 
 /**
  * 배치 크기 — voyage-4 단일 요청은 문서 수·토큰 양쪽 한도를 가진다.
- * 비법령(심판례·해석례) 본문은 최대 6,000자(약 4,000 토큰) × 20건 ≈ 80,000 토큰으로 안전.
+ * 글자 수 예산과 함께 적용한다. 긴 문서가 한 요청에 몰려 토큰 한도를 넘지 않도록 방어한다.
  */
-const BATCH_SIZE = 20
+export const BATCH_SIZE = 20
+
+/**
+ * voyage-4 요청당 입력 글자 수 예산.
+ * 한국어 약 1.5~2자/토큰 기준 90,000자는 약 45,000~60,000 토큰이다.
+ */
+export const BATCH_CHARACTER_BUDGET = 90_000
 
 /**
  * voyage-4 컨텍스트 최대 32,000 토큰.
- * 한국어는 약 1.5~2자/토큰이므로 6000자 ≈ 3000~4000 토큰으로 안전하게 제한.
+ * 한국어 약 1.5~2자/토큰 기준 30,000자는 약 15,000~20,000 토큰으로 안전하게 제한한다.
+ * 현재 국세청 세법해석례 최장 본문(26,886자)을 절단하지 않는다.
  */
-const MAX_CONTENT_CHARS = 6000
+export const MAX_CONTENT_CHARS = 30_000
 
 /** Node/V8 문자열 길이 한계(536,870,888자) 방어 — 이 바이트 수 이상이면 줄 스트리밍 모드 */
 export const STREAM_THRESHOLD_BYTES = 0.5 * 1024 * 1024 * 1024
 
 export function truncateContent(content: string): string {
   return content.length > MAX_CONTENT_CHARS ? content.slice(0, MAX_CONTENT_CHARS) + '(…)' : content
+}
+
+/** 다음 문서를 추가하면 배치 글자 수 예산을 채우거나 넘는지 판단한다. */
+export function shouldFlushBeforeAdding(batch: TaxLaw[], nextLaw: TaxLaw): boolean {
+  if (batch.length === 0) return false
+  const batchCharacterCount = batch.reduce((total, law) => total + law.content.length, 0)
+  return batchCharacterCount + nextLaw.content.length >= BATCH_CHARACTER_BUDGET
 }
 
 export function sha256(text: string): string {
@@ -175,7 +189,6 @@ async function main() {
 
   let inserted = 0
   let skipped = 0
-  const totalBatches = Math.ceil(metaLaws.length / BATCH_SIZE)
   let batchNum = 0
   let batch: TaxLaw[] = []
 
@@ -199,7 +212,7 @@ async function main() {
     skipped += current.length - newItems.length
 
     if (newItems.length === 0) {
-      console.log(`[embed] 배치 ${batchNum}/${totalBatches}: 전체 스킵 (이미 적재됨)`)
+      console.log(`[embed] 배치 ${batchNum}: 전체 스킵 (이미 적재됨)`)
       return
     }
 
@@ -232,19 +245,23 @@ async function main() {
             law.issuingBody || null,
             law.decisionDate || null,
             hash,
-            JSON.stringify({ embeddingModel: VOYAGE_EMBEDDING_MODEL }),
+            JSON.stringify({
+              embeddingModel: VOYAGE_EMBEDDING_MODEL,
+              ...(law.externalId?.trim() ? { externalId: law.externalId.trim() } : {}),
+            }),
           ],
         ),
       )
       inserted++
     }
 
-    console.log(`[embed] 배치 ${batchNum}/${totalBatches}: ${newItems.length}건 적재 완료`)
+    console.log(`[embed] 배치 ${batchNum}: ${newItems.length}건 적재 완료`)
   }
 
   // ── 2패스: 실제 적재 (content 보유분만, 배치 채워지는 즉시 처리 — 전체를 메모리에 올리지 않음) ──
   for await (const law of iterateLaws(inputFile)) {
     if (!hasContent(law)) continue
+    if (shouldFlushBeforeAdding(batch, law)) await flushBatch()
     batch.push(law)
     if (batch.length === BATCH_SIZE) await flushBatch()
   }

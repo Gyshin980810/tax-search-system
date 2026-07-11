@@ -70,6 +70,25 @@ describe('embed input quality — 비법령 caseNumber 검사', () => {
     expect(report.duplicateCaseNumbers).toHaveLength(0)
   })
 
+  it('externalId가 있으면 caseNumber 대신 externalId로 중복을 판정한다', () => {
+    const report = inspectNonLawCaseNumbers([
+      { ...makeNonLaw('해석례', '재산'), externalId: 'NTS-1' },
+      { ...makeNonLaw('해석례', '재산'), externalId: 'NTS-2' },
+    ])
+
+    expect(report.hasIssues).toBe(false)
+  })
+
+  it('같은 externalId는 caseNumber가 달라도 중복으로 보고한다', () => {
+    const report = inspectNonLawCaseNumbers([
+      { ...makeNonLaw('해석례', '재산'), externalId: 'NTS-1' },
+      { ...makeNonLaw('해석례', '소득'), externalId: 'NTS-1' },
+    ])
+
+    expect(report.duplicateCaseNumbers).toHaveLength(1)
+    expect(report.duplicateCaseNumbers[0]).toMatchObject({ externalId: 'NTS-1', count: 2 })
+  })
+
   it('비법령 caseNumber 누락과 공백을 보고한다', () => {
     const report = inspectNonLawCaseNumbers([
       makeNonLaw('해석례', undefined),
