@@ -422,6 +422,15 @@ function toNtsExpcSourceUrl(rawLink: string): string {
   return 'https://taxlaw.nts.go.kr/'
 }
 
+/** 국세청 해석례 공개 상세 링크에서 고유 문서 ID(ntstDcmId)를 추출한다. */
+function extractNtsExternalId(rawLink: string): string {
+  try {
+    return new URL(rawLink).searchParams.get('ntstDcmId')?.trim() ?? ''
+  } catch {
+    return ''
+  }
+}
+
 /**
  * 조세심판원 결정례 원문 링크 — 청구번호로 행정심판재결례 검색에 딥링크한다 (TAX-016C).
  *  API 상세링크는 OC(키)를 포함하고(§7 위반), 키 없는 직접 뷰어(deccInfoP)는 일반 decc 전용이라
@@ -528,6 +537,7 @@ interface NonLawBase {
   content: string
   decisionDate: string
   sourceUrl: string
+  externalId?: string
 }
 
 function buildNonLawTaxLaw(base: NonLawBase): TaxLaw {
@@ -544,6 +554,7 @@ function buildNonLawTaxLaw(base: NonLawBase): TaxLaw {
     caseNumber: base.caseNumber,
     issuingBody: base.issuingBody,
     decisionDate: base.decisionDate,
+    ...(base.externalId ? { externalId: base.externalId } : {}),
   }
 }
 
@@ -959,6 +970,7 @@ export class NationalTaxLawAdapter implements ISearchPort {
       content: '',                       // 국세청 해석은 본문 미제공 → 참고 목록(TAX-015B/D)
       decisionDate,
       sourceUrl: toNtsExpcSourceUrl(e.법령해석상세링크),
+      externalId: extractNtsExternalId(e.법령해석상세링크),
     })
   }
 

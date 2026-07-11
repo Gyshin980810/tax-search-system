@@ -1,7 +1,7 @@
 /**
  * searchMerge 도메인 유틸 단위 테스트 (TAX-6B-26)
  *
- * - identityKey: 법령=법령명+조문번호 / 비법령=자료유형+사건번호
+ * - identityKey: 법령=법령명+조문번호 / 비법령=자료유형+externalId 우선, 사건번호 폴백
  * - mergeSearchItems: 순서 보존 + identityKey 중복 제거(first-wins) + 원본 무변형
  */
 import { describe, it, expect } from 'vitest'
@@ -38,6 +38,14 @@ describe('identityKey — 자료 식별 키', () => {
     expect(identityKey(tribunal)).toBe('심판례|조심2019서2461')
   })
 
+  it('externalId가 있는 비법령은 사건번호 대신 externalId로 식별한다', () => {
+    const first = makeLaw({ sourceType: '해석례', caseNumber: '재산', externalId: 'NTS-1' })
+    const second = makeLaw({ sourceType: '해석례', caseNumber: '재산', externalId: 'NTS-2' })
+
+    expect(identityKey(first)).toBe('해석례|NTS-1')
+    expect(identityKey(first)).not.toBe(identityKey(second))
+  })
+
   it('같은 법령명이라도 조문번호가 다르면 다른 키다', () => {
     const a = makeLaw({ articleNumber: '제1조' })
     const b = makeLaw({ articleNumber: '제2조' })
@@ -71,6 +79,13 @@ describe('mergeSearchItems — 순서 보존 병합 + 중복 제거', () => {
     const t2 = makeLaw({ sourceType: '심판례', caseNumber: 'B', lawName: '조세심판원 결정례' })
     const merged = mergeSearchItems([[t1], [t1dup, t2]])
     expect(merged.map((l) => l.caseNumber)).toEqual(['A', 'B'])
+  })
+
+  it('같은 caseNumber라도 externalId가 다르면 별도 자료로 유지한다', () => {
+    const first = makeLaw({ sourceType: '해석례', caseNumber: '재산', externalId: 'NTS-1' })
+    const second = makeLaw({ sourceType: '해석례', caseNumber: '재산', externalId: 'NTS-2' })
+
+    expect(mergeSearchItems([[first], [second]])).toEqual([first, second])
   })
 
   it('빈 목록·빈 입력을 안전하게 처리한다', () => {

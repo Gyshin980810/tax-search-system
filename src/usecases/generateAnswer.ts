@@ -5,6 +5,7 @@ import { DISCLAIMER } from '../domain/disclaimer'
 import { computeVerifyDiagnostics } from '../adapters/verifyDiagnostics'
 import { extractTerms, scoreRelevance, cosineSimilarity, combinedScore, citationBoost } from '../domain/nonLawRelevance'
 import { normalizeTribunalCaseNumber } from '../domain/precedentCitation'
+import { identityKey } from '../domain/searchMerge'
 import type { IQueryRewriterPort } from '../ports/llmQueryRewriterPort'
 import type { ISearchPort } from '../ports/taxLawSearchPort'
 import type { IAnswerGeneratorPort } from '../ports/llmAnswerGeneratorPort'
@@ -64,9 +65,10 @@ const SEMANTIC_RERANK_LIMIT = 20
  * 바닥만으로 완전 분리는 불가 → 상한 소수 + 라벨(⚪T4·🟡T3)로 위험을 제한한다.
  * 심판례는 판례와 동일 게이트를 적용한다(티켓 TAX-6B-18 §4[4] 결정 — 노이즈 억제 우선).
  */
-const VECTOR_REFERENCE_GATES: { sourceType: '판례' | '심판례'; topK: number; minSimilarity: number; max: number }[] = [
+const VECTOR_REFERENCE_GATES: { sourceType: '판례' | '심판례' | '해석례'; topK: number; minSimilarity: number; max: number }[] = [
   { sourceType: '판례', topK: 5, minSimilarity: 0.5, max: 2 },
   { sourceType: '심판례', topK: 5, minSimilarity: 0.5, max: 2 },
+  { sourceType: '해석례', topK: 5, minSimilarity: 0.5, max: 2 },
 ]
 
 /**
@@ -82,13 +84,6 @@ const MAX_CITATION_EXPANSION = 3
  */
 function relevanceScore(ref: TaxLaw, terms: string[]): number {
   return scoreRelevance(`${ref.articleTitle} ${ref.lawName}`, ref.content, terms)
-}
-
-/** 자료 식별 키 — 인용 여부 비교용 (법령=조문번호, 비법령=사건/안건번호) */
-function identityKey(t: TaxLaw): string {
-  return t.sourceType === '법령'
-    ? `법령|${t.lawName}|${t.articleNumber}`
-    : `${t.sourceType}|${t.caseNumber ?? ''}`
 }
 
 /**
@@ -286,7 +281,7 @@ async function fetchVectorReferences(
   queryVec: number[] | undefined,
   vectorSearchPort: IVectorSearchPort | undefined,
   excludeKeys: Set<string>,
-  gate: { sourceType: '판례' | '심판례'; topK: number; minSimilarity: number; max: number },
+  gate: { sourceType: '판례' | '심판례' | '해석례'; topK: number; minSimilarity: number; max: number },
 ): Promise<{ ref: TaxLaw; score: number }[]> {
   if (!vectorSearchPort || !queryVec) return []
   try {

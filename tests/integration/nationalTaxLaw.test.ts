@@ -491,6 +491,7 @@ describe('NationalTaxLawAdapter 통합 테스트 (MSW)', () => {
       expect(nts).toBeDefined()
       expect(nts!.trustTier).toBe('T3')
       expect(nts!.caseNumber).toBe('법인22601-2200')          // 안건번호 = V1 식별자
+      expect(nts!.externalId).toBe('010000000000100201')      // ntstDcmId = 실제 문서 식별자
       expect(nts!.decisionDate).toBe('2024-08-05')            // 해석일자 정규화
       expect(nts!.articleTitle).toBe('가지급금 인정이자 계산방법')
       // 국세청 해석은 본문 미제공 → content는 빈 문자열(발췌 인용 불가, 참고 목록 대상)

@@ -6,7 +6,11 @@
 >
 > 본 티켓은 **계획서**이며, 회계사 승인 전까지 착수하지 않는다.
 > 부모 티켓 §9 분할의 **세 번째 단계**다(20-A 수집 → 20-B 적재 → **20-C 검색 배선** → 20-D 문서 정합).
-> **선행 조건: 20-B 적재 완료**(pgvector에 `source_type='해석례'` 행이 실제로 존재해야 검색이 붙는다).
+> **선행 조건(모두 충족 후 착수, 2026-07-11 검토 반영):**
+> - `taxlaw_embeddings`에 `source_type='해석례'` 실제 적재 완료(pgvector에 행이 존재해야 검색이 붙는다)
+> - 해석례 행 수 및 임베딩 차원(1024) 확인
+> - `externalId` 기준 진짜 중복 0건 확인(20-B 적재 시점 리포트로 대체 가능)
+> - 기존 판례·심판례 벡터 쿼리 단독 기준선 측정 완료(§7 전수 스캔 2배 성장 위험 대조용)
 
 ---
 
@@ -95,12 +99,17 @@ const VECTOR_REFERENCE_GATES: { sourceType: '판례' | '심판례'; topK: number
   여기서 읽어야 TaxLaw까지 전달됨). 판례·심판례 기존 행은 metadata에 externalId가 없음 → NULL →
   caseNumber 폴백으로 하위호환.
 - [ ] vitest — 해석례 게이트가 참고 목록에 합류하는지 + minSimilarity 미달 시 제외되는지 + **동일
-  caseNumber가 실시간 해석례 결과와 벡터 매치에 동시 존재 시 1건만 노출**(excludeKeys dedup)되는지 단위 테스트
+  externalId가 실시간 해석례 결과와 벡터 매치에 동시 존재 시 1건만 노출**(excludeKeys dedup)되는지 단위 테스트
   — ⚠️ **§0.1(20-B) 실증 반영**: caseNumber 자체가 2004년 이전 문서에서 세목명만 공유(예: "재산" 82건)
   하므로, **서로 다른 문서인데 caseNumber가 같다는 이유로 잘못 눈에 dedup되는 과잉 제외 케이스도
   테스트에 포함**(예: 실시간 결과 하나가 caseNumber="재산"이면 벡터 매치의 다른 81건이 전부 부당하게
   제외되지 않는지). 근본 대응은 아래 4-(d)·5 참고.
-- [ ] `npm run typecheck` 0에러 + vitest 전건 통과 + **P95 합격선(15s) 미회귀** 실측
+- [ ] `npm run typecheck` 0에러 + vitest 전건 통과
+- [ ] **성능·비용 게이트 분리 측정**(2026-07-11 검토 — `npm run perf:p95`는 LLM/API 비용을 발생시키므로 분리):
+  1. **무비용 측정**: 벡터 쿼리(`searchSimilar('해석례')`) 단독 왕복 시간만 반복 측정(DB 비용만 발생, LLM 호출 없음) —
+     20-B가 남긴 판례·심판례 벡터 쿼리 단독 기준선과 대조
+  2. **종단 측정(비용 발생)**: LLM/API를 포함한 P95 합격선(15s) 미회귀 — 실행 전 예상 비용을 회계사에게
+     보고하고 승인받은 뒤 실행. 비교 지표·실행 횟수·합격 기준을 실행 직전 티켓에 기록
 
 ### 3.2 금지되는 변경
 
@@ -117,7 +126,8 @@ const VECTOR_REFERENCE_GATES: { sourceType: '판례' | '심판례'; topK: number
 
 ### 결정 — 해석례 게이트 값(max·minSimilarity)
 
-> 배경: 해석례는 136K건으로 심판례(3,981건 dedup)·판례보다 코퍼스가 크다. 참고 목록에 너무 많이
+> 배경: 해석례는 136K건으로 심판례(전체 적재 135,810건 중 3,981건은 병합사건으로 별도 행이 생성되지
+> 않은 dedup 수치)·판례(10,075건)보다 코퍼스가 크다. 참고 목록에 너무 많이
 > 끼면 노이즈, 너무 적으면 재현율 손해. **참고 목록 총량**(판례 max2 + 심판례 max2 + 해석례 max?)의
 > 균형을 어떻게 둘지가 유일한 결정이다.
 
@@ -139,11 +149,19 @@ const VECTOR_REFERENCE_GATES: { sourceType: '판례' | '심판례'; topK: number
    ⑵ `src/domain/searchMerge.ts:18`(**공용** — `searchWithFallback.ts`와 `nationalTaxLaw.ts:626`의
    실시간 검색 결과 병합이 사용. 2004년 이전 해석례 2건이 같은 caseNumber로 실시간 결과에 동시에
    잡히면 **지금도 1건이 과잉 dedup되어 사라질 수 있는 라이브 경로**).
+   - **권장 구현 방식(2026-07-11 검토)**: 두 사본을 각각 고치는 대신, `src/domain/searchMerge.ts`의
+     `identityKey`를 단일 진실 원천으로 두고 `generateAnswer.ts`가 이를 import하도록 구현한다(같은 식별
+     정책의 향후 드리프트 방지 — externalId 우선·caseNumber 폴백 규칙을 한 곳에서만 보장). 이 변경은
+     식별키 중복 제거에 한정하고 그 외 광범위한 리팩터로 확장하지 않는다.
    - **3a. `vectorSearch.ts` 보강(dedup의 전제)**: SELECT에 `metadata->>'externalId' AS external_id`
      컬럼 추가 + `rowToTaxLaw`에 `...(row.external_id ? { externalId: row.external_id } : {})` 매핑
      1줄. 20-B가 metadata(JSONB)에 저장한 externalId를 여기서 안 읽으면 벡터 매치의 externalId가
      항상 undefined → 실시간(externalId 보유) 쪽과 키가 달라져 externalId 기반 dedup이 **라이브에서
      무력화**된다(판례·심판례 기존 행은 NULL → caseNumber 폴백, 하위호환).
+     **테스트 방법(2026-07-11 검토, 추천안)**: `rowToTaxLaw`는 현재 비공개 함수이므로, Pool을 모킹한
+     통합 테스트 대신 **순수 매핑 함수 `rowToTaxLaw`를 export해 직접 단위 테스트**한다(최소 변경으로
+     실제 DB 행 구조를 픽스처가 그대로 통과하게 할 수 있음). 필수 케이스: `external_id` 존재 시
+     `TaxLaw.externalId` 매핑 / `external_id` NULL 시 `externalId` 없음(기존 자료 하위호환).
    - **3b. 실시간 어댑터 채우기**: `src/adapters/nationalTaxLaw.ts`의 `toNtsInterpretationTaxLaw`(946행)에
      `externalId: extractNtstDcmId(e.법령해석상세링크)` 1줄 추가(로직은 `collectNtsInterpretations.ts`의
      기존 추출 함수와 동일 패턴 — 신규 로직 아님).
@@ -177,7 +195,10 @@ const VECTOR_REFERENCE_GATES: { sourceType: '판례' | '심판례'; topK: number
 5. [ ] **P95 합격선(15s) 미회귀** 실측(게이트 병렬 유지 확인, 20-B가 남긴 벡터 쿼리 단독 기준선과 대조)
 6. [ ] 발췌 인용·citation 승격이 발생하지 않음(참고 목록 트랙 유지 — V검증 비대상)
 7. [ ] **긴 해석례(6,000자+) 뒷부분 쟁점 프로브 10건 재현율 실측·기록**(후속 20-E 청킹의 정량 승격
-   트리거 기준선 — §6)
+   트리거 **초기** 기준선 — §6). ⚠️ **2026-07-11 검토**: 이 10건은 20-E 착수 여부의 **초기 방향 확인용**일 뿐,
+   L 규모 구조 개편(20-E) 승격을 최종 결정하기엔 표본이 작다. 20-E 승격 판단 전에는 최소 30건 이상의
+   층화 표본(세목·본문 길이·섹션 유형별)으로 확대하고, 기대 문서는 `externalId`로 고정하며, 원시 벡터
+   검색 Recall@5와 최종 참고 목록 노출률(Recall@2)을 분리 측정한다(20-E §0.1 참고).
 
 ---
 
@@ -187,10 +208,13 @@ const VECTOR_REFERENCE_GATES: { sourceType: '판례' | '심판례'; topK: number
 2. `npm run dev` → 법인세 실무 질의(가지급금·부당행위계산부인 등)에서 참고 목록에 **국세청 해석례**가
    제목+링크로 뜨는지, 라벨이 🟡(T3)인지 확인.
 3. 유사도 낮은 무관 질의에선 해석례가 과다 노출되지 않는지(minSimilarity 게이트 동작) 확인.
-4. **긴 해석례 프로브 셋 구축(20-E 트리거 데이터)**: 6,000자+ 해석례(전체의 4.2%)의 **뒷부분 쟁점**으로
+4. **긴 해석례 프로브 셋 구축(20-E 트리거 초기 데이터)**: 6,000자+ 해석례(전체의 4.2%)의 **뒷부분 쟁점**으로
    질의하는 프로브 10건을 만들어 재현율(참고 목록 합류 비율)을 실측·기록 — 이 수치가 후속 20-E(청킹)의
-   정량 승격 트리거 기준선이 된다(라이브 검증하는 김에 데이터가 공짜로 생김).
-5. `npm run perf:p95`(또는 기존 P95 측정 경로)로 합격선 미회귀 확인(20-B 기준선과 대조).
+   정량 승격 트리거 **초기** 기준선이 된다(라이브 검증하는 김에 데이터가 공짜로 생김). 이 10건만으로
+   20-E 착수를 최종 확정하지 않는다 — 30건 이상 층화 표본 확대는 20-E 착수 직전 단계에서 수행(§5 AC7).
+5. **(무비용)** 벡터 쿼리 단독 왕복 시간 측정 — 20-B가 남긴 판례·심판례 기준선과 대조.
+6. **(비용 발생, 회계사 사전 승인 필요)** `npm run perf:p95`(또는 기존 P95 측정 경로)로 LLM/API 포함
+   종단 합격선(15s) 미회귀 확인.
 
 ---
 
@@ -241,3 +265,9 @@ ANN 재확인 트리거 명시, ④ 실시간↔벡터 중복 노출 방지 vite
 `rowToTaxLaw` 매핑 보강을 §2.1·§3.1·§4-3a에 명시(이것 없이는 벡터 매치에 externalId가 없어 dedup
 라이브 무력화), ② `identityKey` 사본이 2곳(generateAnswer.ts:88 + **searchMerge.ts:18 공용** — 실시간
 병합 경로도 과잉 dedup 위험)임을 §4-3에 명시, ③ 픽스처 함정 경고 + `rowToTaxLaw` 단위 테스트 요구(§4-4·AC4).
+**최종 수정일 4**: 2026-07-11 — 계획 재검토 반영: ① 착수 선행조건을 4개 항목으로 명확화, ② §3.1 vitest
+서술에 남아있던 "caseNumber" 잔재를 "externalId"로 정정(§4의 실제 구현 기준과 통일), ③ `identityKey`를
+`searchMerge.ts` 단일 진실 원천으로 두고 `generateAnswer.ts`가 import하는 방식 권장, ④ `rowToTaxLaw`
+테스트 방법을 "순수 함수 export" 방식으로 명시, ⑤ 심판례 규모 표현을 "135,810건 중 3,981건 병합"으로
+정정, ⑥ P95 측정을 무비용(벡터 쿼리 단독)과 비용 발생(LLM 종단) 두 단계로 분리, ⑦ 프로브 10건은
+20-E 착수의 초기 방향 확인용일 뿐이며 최종 승격 판단은 30건 이상 층화 표본으로 확대함을 명시.
