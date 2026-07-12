@@ -925,8 +925,13 @@ export class NationalTaxLawAdapter implements ISearchPort {
   /**
    * 국세청 법령해석 검색 (target=ntsCgmExpc) — 목록만 조회 (TAX-016B)
    *
-   * 국세청 해석은 목록(메타)만 제공되고 본문(전문)이 없다(실호출 확정 2026-05-22).
-   * 따라서 본문 조회 단계 없이 content=''인 TaxLaw로 정규화한다.
+   * 이 실시간 경로는 목록(메타)만 조회하고 content=''로 정규화한다. 본문 조회 공식 API는
+   * 존재하나 운영키의 본문 조회 권한이 미신청·신청 봉쇄 상태라 이 경로에서는 쓸 수 없다
+   * (2026-07-08 확정 — TAX-6B-20-A). 국세청 해석례 본문은 별도 오프라인 코퍼스(taxlaw.nts.go.kr
+   * 크롤링 → voyage-4 임베딩 → pgvector, TAX-6B-20-A~C)로 확보돼 있으며, 그 결과는 이 실시간
+   * 경로와 무관하게 generateAnswer의 벡터 참고 목록(references)에 별도로 합류한다 — 즉 "본문을
+   * 아예 못 구한다"는 뜻이 아니라 "이 실시간 경로는 P95 보호를 위해 의도적으로 목록만 유지한다"는
+   * 뜻이다(SSOT §7.2-a).
    * 상위 generateAnswer가 본문 없는 비법령을 참고 목록(references)으로 처리한다(TAX-015B/D).
    * 발췌 인용·law-verifier V검증 대상이 아니다(citation 승격 금지).
    * 법제처 해석례(expc)와 같은 sourceType='해석례'이며, issuingBody='국세청'으로 구분된다.
