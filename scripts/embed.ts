@@ -71,6 +71,21 @@ export function sha256(text: string): string {
 }
 
 /**
+ * 국세청 원본 데이터는 월/일 미상을 "2009-00-00"처럼 00으로 표기하는 경우가 있다.
+ * Postgres date 컬럼은 이를 거부(date/time field value out of range)하므로
+ * 저장 전에 걸러 null로 대체한다. 원본 문자열은 호출부에서 metadata에 보존한다.
+ */
+export function sanitizeDate(value: string | undefined): string | null {
+  if (!value) return null
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim())
+  if (!match) return null
+  const month = Number(match[2])
+  const day = Number(match[3])
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null
+  return value.trim()
+}
+
+/**
  * `[`로 시작해 한 줄에 객체 하나씩(끝에 `,` 붙을 수 있음) 나열된 배열 파일의 한 줄을 파싱한다.
  * `[`·`]`·빈 줄은 null(건너뜀). collectTribunal.ts finalize() 산출물 형식과 일치.
  */
@@ -222,6 +237,9 @@ async function main() {
       const law = newItems[j]
       const embedding = embeddings[j]
       const hash = newHashes[j]
+      const revisionDate = sanitizeDate(law.revisionDate)
+      const enforcementDate = sanitizeDate(law.enforcementDate)
+      const decisionDate = sanitizeDate(law.decisionDate)
       await withRetry(() =>
         pool.query(
           `INSERT INTO taxlaw_embeddings
@@ -238,16 +256,20 @@ async function main() {
             law.articleTitle || null,
             law.content,
             `[${embedding.join(',')}]`,
-            law.revisionDate || null,
-            law.enforcementDate || null,
+            revisionDate,
+            enforcementDate,
             law.sourceUrl,
             law.trustTier,
             law.issuingBody || null,
-            law.decisionDate || null,
+            decisionDate,
             hash,
             JSON.stringify({
               embeddingModel: VOYAGE_EMBEDDING_MODEL,
               ...(law.externalId?.trim() ? { externalId: law.externalId.trim() } : {}),
+              // 날짜 검증에 걸려 null로 대체된 경우 원본 문자열 보존(§6.1 원문 보존 정신)
+              ...(law.revisionDate && !revisionDate ? { rawRevisionDate: law.revisionDate } : {}),
+              ...(law.enforcementDate && !enforcementDate ? { rawEnforcementDate: law.enforcementDate } : {}),
+              ...(law.decisionDate && !decisionDate ? { rawDecisionDate: law.decisionDate } : {}),
             }),
           ],
         ),

@@ -7,6 +7,7 @@ import {
   iterateLaws,
   MAX_CONTENT_CHARS,
   parseArrayLine,
+  sanitizeDate,
   sha256,
   shouldFlushBeforeAdding,
   STREAM_THRESHOLD_BYTES,
@@ -137,6 +138,38 @@ describe('iterateLaws', () => {
 
   it('기본 STREAM_THRESHOLD_BYTES는 약 0.5GiB이다', () => {
     expect(STREAM_THRESHOLD_BYTES).toBe(0.5 * 1024 * 1024 * 1024)
+  })
+})
+
+describe('sanitizeDate', () => {
+  it('정상 YYYY-MM-DD 값은 그대로 반환한다', () => {
+    expect(sanitizeDate('2026-01-15')).toBe('2026-01-15')
+  })
+
+  it('월이 00인 값(국세청 원본 "월/일 미상" 표기)은 null을 반환한다', () => {
+    expect(sanitizeDate('2009-00-00')).toBeNull()
+  })
+
+  it('일이 00인 값은 null을 반환한다', () => {
+    expect(sanitizeDate('2010-02-00')).toBeNull()
+  })
+
+  it('월이 12 초과면 null을 반환한다', () => {
+    expect(sanitizeDate('2020-13-01')).toBeNull()
+  })
+
+  it('일이 31 초과면 null을 반환한다', () => {
+    expect(sanitizeDate('2020-01-32')).toBeNull()
+  })
+
+  it('빈 문자열·undefined는 null을 반환한다', () => {
+    expect(sanitizeDate('')).toBeNull()
+    expect(sanitizeDate(undefined)).toBeNull()
+  })
+
+  it('YYYY-MM-DD 형식이 아니면 null을 반환한다', () => {
+    expect(sanitizeDate('2026/01/15')).toBeNull()
+    expect(sanitizeDate('현행')).toBeNull()
   })
 })
 
