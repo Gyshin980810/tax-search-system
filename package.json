@@ -28,6 +28,8 @@
     "collect:nonlaw": "node --env-file=.env.local --conditions=react-server --import tsx scripts/collectNonlaw.ts",
     "migrate": "node --env-file=.env.local --import tsx scripts/migrate.ts",
     "citation:build": "node --env-file=.env.local --import tsx scripts/buildCitationEdges.ts",
+    "overruled:extract": "node --import tsx scripts/extractOverruledCandidates.ts",
+    "overruled:apply": "node --env-file=.env.local --import tsx scripts/applyOverruledReview.ts",
     "embed": "node --env-file=.env.local --conditions=react-server --import tsx scripts/embed.ts",
     "smoke:vector": "node --env-file=.env.local --conditions=react-server --import tsx scripts/smokeVector.ts",
     "convert:precedent": "tsx scripts/convertPrecedentMd.ts",

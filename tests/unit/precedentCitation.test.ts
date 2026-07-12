@@ -11,6 +11,11 @@ import {
   extractCitedDate,
   extractSnippet,
   parseReferencedCitations,
+  findReversalSignals,
+  parseReviewTable,
+  classifyReviewVerdict,
+  parseDocCell,
+  parseOverruledTarget,
 } from '@/domain/precedentCitation'
 
 describe('precedentCitation (TAX-6B-23 판례 인용 연결망)', () => {
@@ -262,6 +267,147 @@ describe('precedentCitation (TAX-6B-31 인용 엣지 추출·분류)', () => {
 
     it('빈 필드는 빈 배열을 반환한다', () => {
       expect(parseReferencedCitations('')).toEqual([])
+    })
+  })
+})
+
+describe('precedentCitation (TAX-6B-33 OVERRULED 검수 큐)', () => {
+  describe('findReversalSignals', () => {
+    it('전원합의체 신호를 탐지한다', () => {
+      const content = '대법원 2013다61381 전원합의체 판결을 따른다'
+      const signals = findReversalSignals(content)
+      expect(signals.map((s) => s.signal)).toEqual(['전원합의체'])
+    })
+
+    it('판례변경 신호를 탐지한다', () => {
+      const content = '종전 대법원 판례를 변경하는 취지의 판결이다'
+      expect(findReversalSignals(content).map((s) => s.signal)).toEqual(['판례변경'])
+    })
+
+    it("'변경신고'는 판례변경으로 오인하지 않는다(오탐 차단, {0,6} 창 확인)", () => {
+      // '판례'라는 단어 자체가 없으므로 매칭되지 않아야 한다
+      const content = '부가가치세 변경신고를 하였다'
+      expect(findReversalSignals(content)).toEqual([])
+    })
+
+    it('견해변경·배치범위변경 신호도 탐지한다', () => {
+      const a = findReversalSignals('종전 견해를 변경하기로 한다')
+      const b = findReversalSignals('이 판결에 배치되는 범위에서 이를 변경하기로 한다')
+      expect(a.map((s) => s.signal)).toEqual(['견해변경'])
+      expect(b.map((s) => s.signal)).toEqual(['배치범위변경'])
+    })
+
+    it('여러 신호를 등장 순서대로 반환한다', () => {
+      const content = '전원합의체 판결로 종전 판례를 변경한다'
+      const signals = findReversalSignals(content)
+      expect(signals.map((s) => s.signal)).toEqual(['전원합의체', '판례변경'])
+      expect(signals[0].index).toBeLessThan(signals[1].index)
+    })
+
+    it('신호 위치는 extractSnippet과 함께 써도 항상 원문 부분 문자열이다(§6.1)', () => {
+      const content = '가나다라마바사 대법원 전원합의체 판결을 따른다 ABCDEFGHIJ'
+      const [signal] = findReversalSignals(content)
+      const snippet = extractSnippet(content, signal.index, 10)
+      expect(content.includes(snippet)).toBe(true)
+    })
+
+    it('신호가 없으면 빈 배열을 반환한다', () => {
+      expect(findReversalSignals('아무 신호도 없는 본문입니다.')).toEqual([])
+    })
+  })
+
+  describe('parseReviewTable', () => {
+    const header =
+      '| # | 문서(사건번호) | 신호 | 원문 발췌 | 검수 결과 | 뒤집은 주체 | 뒤집힌 대상 |\n' +
+      '|---|---|---|---|---|---|---|\n'
+
+    it('확정(판례→판례) 행을 파싱한다', () => {
+      const table = header + '| 1 | 심판례 조심2026중1148 | 전원합의체 | "발췌" | 확정(판례→판례) | 대법원 | 2008두150 |\n'
+      const { rows, errors } = parseReviewTable(table)
+      expect(errors).toEqual([])
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toMatchObject({
+        no: 1,
+        caseNumber: '심판례 조심2026중1148',
+        verdict: '확정(판례→판례)',
+        overruledBy: '대법원',
+        overruledTarget: '2008두150',
+      })
+    })
+
+    it('빈칸(미검수) 행도 정상 파싱한다(스킵 대상이지 오류 아님)', () => {
+      const table = header + '| 1 | 판례 88누11926 | 전원합의체 | "발췌" |  |  |  |\n'
+      const { rows, errors } = parseReviewTable(table)
+      expect(errors).toEqual([])
+      expect(rows[0].verdict).toBe('')
+    })
+
+    it('해당없음·보류 행도 정상 파싱한다', () => {
+      const table =
+        header +
+        '| 1 | 판례 88누11926 | 전원합의체 | "발췌1" | 해당없음 |  |  |\n' +
+        '| 2 | 판례 99누22222 | 판례변경 | "발췌2" | 보류 |  |  |\n'
+      const { rows, errors } = parseReviewTable(table)
+      expect(errors).toEqual([])
+      expect(rows.map((r) => r.verdict)).toEqual(['해당없음', '보류'])
+    })
+
+    it('허용되지 않은 검수 결과 값은 오류로 보고한다(오타 차단)', () => {
+      // 화살표를 ASCII '->'로 잘못 입력한 오타 사례
+      const table = header + '| 1 | 판례 88누11926 | 전원합의체 | "발췌" | 확정(판례->판례) |  |  |\n'
+      const { rows, errors } = parseReviewTable(table)
+      expect(rows).toEqual([])
+      expect(errors).toHaveLength(1)
+      expect(errors[0].reason).toContain('확정(판례->판례)')
+    })
+
+    it('헤더·구분선 행은 데이터로 취급하지 않는다', () => {
+      const { rows, errors } = parseReviewTable(header)
+      expect(rows).toEqual([])
+      expect(errors).toEqual([])
+    })
+  })
+
+  describe('classifyReviewVerdict', () => {
+    it('확정(판례→판례)는 apply로 분류한다', () => {
+      expect(classifyReviewVerdict('확정(판례→판례)')).toBe('apply')
+    })
+    it('확정(입법→판례)는 superseded_by_law로 분류한다', () => {
+      expect(classifyReviewVerdict('확정(입법→판례)')).toBe('superseded_by_law')
+    })
+    it('해당없음·보류·빈칸은 모두 skip으로 분류한다', () => {
+      expect(classifyReviewVerdict('해당없음')).toBe('skip')
+      expect(classifyReviewVerdict('보류')).toBe('skip')
+      expect(classifyReviewVerdict('')).toBe('skip')
+    })
+  })
+
+  describe('parseDocCell', () => {
+    it('판례/심판례 접두 셀을 종류·사건번호로 분해한다', () => {
+      expect(parseDocCell('판례 88누11926')).toEqual({ docType: '판례', caseNumber: '88누11926' })
+      expect(parseDocCell('심판례 조심2022서1437')).toEqual({ docType: '심판례', caseNumber: '조심2022서1437' })
+    })
+    it('심판례 사건번호의 일련번호를 4자리로 0채움한다', () => {
+      expect(parseDocCell('심판례 조심2018지166')).toEqual({ docType: '심판례', caseNumber: '조심2018지0166' })
+    })
+    it('알 수 없는 접두는 null을 반환한다(반영 차단)', () => {
+      expect(parseDocCell('법령 소득세법')).toBeNull()
+    })
+    it('공백이 없는 셀은 null을 반환한다', () => {
+      expect(parseDocCell('88누11926')).toBeNull()
+    })
+  })
+
+  describe('parseOverruledTarget', () => {
+    it('조심/국심/감심 접두는 심판례로 추정한다', () => {
+      expect(parseOverruledTarget('조심2022서1437')).toEqual({ docType: '심판례', caseNumber: '조심2022서1437' })
+    })
+    it('접두가 없으면 판례로 간주한다', () => {
+      expect(parseOverruledTarget('2008두150')).toEqual({ docType: '판례', caseNumber: '2008두150' })
+    })
+    it('빈 문자열은 null을 반환한다', () => {
+      expect(parseOverruledTarget('')).toBeNull()
+      expect(parseOverruledTarget('   ')).toBeNull()
     })
   })
 })
