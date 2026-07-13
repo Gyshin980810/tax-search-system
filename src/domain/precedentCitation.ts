@@ -177,7 +177,7 @@ export function buildCitationGraph(
  *   - REFERS : '참조'·무표지 = 참고 (약한 관계, 기본값)
  *   - APPEAL : '원심판결'·'환송' = 같은 사건의 심급 관계 (선례 인용과 분리, §2.4 ③)
  */
-export type CitationEdgeType = 'FOLLOWS' | 'REFERS' | 'APPEAL'
+export type CitationEdgeType = 'FOLLOWS' | 'REFERS' | 'APPEAL' | 'OVERRULED'
 
 /**
  * 심판례 인용 패턴 — 기관 접두(조심/국심/감심)를 필수로 두어 오탐을 차단한다.
@@ -318,4 +318,157 @@ export function parseReferencedCitations(field: string): ParsedReferencedCitatio
     })
   }
   return out
+}
+
+// ─── TAX-6B-33: 뒤집힘(OVERRULED) 신호 탐지 + 검수 표 파싱 ──────────────────────
+//
+// 판례·심판례 본문에서 "이후 뒤집힌 법리일 수 있다"는 신호(전원합의체·판례변경 등)만
+// 후보로 탐지한다. 방향·주체 판정은 LLM이 아니라 회계사가 검수 표에 직접 기입하며,
+// 이 파일은 그 표를 결정론적으로 파싱만 한다(§6.1 원문 보존 — LLM 판정 금지 원칙).
+
+/** 뒤집힘 후보 신호 종류(재평가 프로브 검증분, TAX-6B-33 §2.1 실측치와 대응) */
+export type ReversalSignalName = '판례변경' | '배치범위변경' | '전원합의체' | '견해변경'
+
+/** 신호 이름 → 정규식 소스. global 플래그는 findReversalSignals에서 매 호출마다 새로 부여한다. */
+export const REVERSAL_PATTERNS: { name: ReversalSignalName; source: string }[] = [
+  { name: '판례변경', source: '판례.{0,6}변경' },
+  { name: '배치범위변경', source: '배치되는\\s*범위에서.{0,10}변경' },
+  { name: '전원합의체', source: '전원합의체' },
+  { name: '견해변경', source: '견해.{0,6}변경' },
+]
+
+/** 본문에서 탐지된 뒤집힘 후보 신호 1건 — 위치는 발췌(extractSnippet) 호출용 */
+export interface ReversalSignal {
+  signal: ReversalSignalName
+  index: number
+}
+
+/**
+ * 본문에서 뒤집힘 후보 신호를 전부 탐지한다(등장 순서 정렬, 중복 위치 허용).
+ * 신호는 "확정"이 아니라 "회계사 검수가 필요한 후보"일 뿐이다 — 이 함수는 방향·주체를
+ * 판단하지 않는다(결정론 원칙, LLM 미사용).
+ * @param content 판례·심판례 본문(원문 그대로, 읽기 전용)
+ */
+export function findReversalSignals(content: string): ReversalSignal[] {
+  const found: ReversalSignal[] = []
+  for (const def of REVERSAL_PATTERNS) {
+    for (const m of content.matchAll(new RegExp(def.source, 'g'))) {
+      found.push({ signal: def.name, index: m.index ?? 0 })
+    }
+  }
+  return found.sort((a, b) => a.index - b.index)
+}
+
+/** 검수 표의 "검수 결과" 컬럼 허용값(빈칸=미검수 포함) — 이 밖의 문구는 오타로 간주해 오류 처리 */
+export type ReviewVerdict = '확정(판례→판례)' | '확정(입법→판례)' | '해당없음' | '보류' | ''
+
+const VALID_VERDICTS = new Set<string>(['확정(판례→판례)', '확정(입법→판례)', '해당없음', '보류', ''])
+
+/** 검수 표 한 행(파싱 결과) — docs/review/OVERRULED_candidates_*.md 표 컬럼과 1:1 대응 */
+export interface ReviewRow {
+  no: number
+  caseNumber: string
+  signal: string
+  snippet: string
+  verdict: ReviewVerdict
+  overruledBy: string
+  overruledTarget: string
+}
+
+/** 검수 표 파싱 시 발견된 오류(허용되지 않는 검수 결과 값 등) — 원본 줄 번호 동반 */
+export interface ReviewTableError {
+  line: number
+  reason: string
+}
+
+/** parseReviewTable 결과 — rows는 유효 행만, errors는 오류 행(반영 차단용) */
+export interface ReviewTableParseResult {
+  rows: ReviewRow[]
+  errors: ReviewTableError[]
+}
+
+/**
+ * 검수 표(마크다운) 파싱 — "검수 결과" 컬럼이 허용값 5종
+ * (확정(판례→판례) / 확정(입법→판례) / 해당없음 / 보류 / 빈칸) 중 하나가 아니면
+ * 해당 행을 errors로 보고한다(오타로 인한 오반영을 applyOverruledReview에서 차단하기 위함).
+ * 헤더 행(`#`으로 시작)과 구분선 행(`---`)은 건너뛴다.
+ * @param markdown `| # | 문서(사건번호) | 신호 | 원문 발췌 | 검수 결과 | 뒤집은 주체 | 뒤집힌 대상 |` 표
+ */
+export function parseReviewTable(markdown: string): ReviewTableParseResult {
+  const rows: ReviewRow[] = []
+  const errors: ReviewTableError[] = []
+  const lines = markdown.split('\n')
+
+  lines.forEach((rawLine, i) => {
+    const line = rawLine.trim()
+    if (!line.startsWith('|')) return
+    const cells = line.split('|').slice(1, -1).map((c) => c.trim())
+    if (cells.length < 7) return
+
+    const [noStr, caseNumber, signal, snippet, verdict, overruledBy, overruledTarget] = cells
+    if (noStr === '#') return // 헤더 행
+    if (/^-+$/.test(noStr)) return // 구분선 행(|---|---|...)
+    const no = Number(noStr)
+    if (!Number.isFinite(no)) return // 표 밖 잡음 행(무시)
+
+    if (!VALID_VERDICTS.has(verdict)) {
+      errors.push({ line: i + 1, reason: `허용되지 않은 검수 결과 값: "${verdict}" (행 #${noStr})` })
+      return
+    }
+    rows.push({
+      no,
+      caseNumber,
+      signal,
+      snippet,
+      verdict: verdict as ReviewVerdict,
+      overruledBy,
+      overruledTarget,
+    })
+  })
+
+  return { rows, errors }
+}
+
+/** 검수 결과 값 → 반영 동작 분류(순수함수, DB 비의존) — applyOverruledReview.ts가 이 분류만 따른다 */
+export type ReviewAction = 'apply' | 'superseded_by_law' | 'skip'
+
+export function classifyReviewVerdict(verdict: ReviewVerdict): ReviewAction {
+  if (verdict === '확정(판례→판례)') return 'apply'
+  if (verdict === '확정(입법→판례)') return 'superseded_by_law'
+  return 'skip' // 해당없음 · 보류 · 빈칸
+}
+
+/** 문서(사건번호) 셀 또는 "뒤집힌 대상" 셀을 분해한 결과 */
+export interface ParsedDocCell {
+  docType: '판례' | '심판례'
+  caseNumber: string
+}
+
+/**
+ * 검수 표 "문서(사건번호)" 셀("판례 88누11926" / "심판례 조심2022서1437", extractOverruledCandidates.ts가
+ * 생성한 고정 형식)을 분해한다. 형식이 다르면 null(반영 차단 — 조용히 잘못 파싱하지 않음).
+ */
+export function parseDocCell(cell: string): ParsedDocCell | null {
+  const idx = cell.indexOf(' ')
+  if (idx < 0) return null
+  const docType = cell.slice(0, idx)
+  const raw = cell.slice(idx + 1).trim()
+  if (docType !== '판례' && docType !== '심판례') return null
+  const caseNumber = docType === '심판례' ? normalizeTribunalCaseNumber(raw) : normalizeCaseNumber(raw)
+  return caseNumber ? { docType, caseNumber } : null
+}
+
+/**
+ * "뒤집힌 대상" 셀은 회계사가 자유 기입하므로 접두(조심/국심/감심)로 종류를 추정한다.
+ * 접두가 없으면 판례로 간주한다(코퍼스 대다수가 판례 사건번호 표기이므로 보수적 기본값).
+ */
+export function parseOverruledTarget(raw: string): ParsedDocCell | null {
+  const t = raw.trim()
+  if (!t) return null
+  if (/^(조심|국심|감심)/.test(t)) {
+    const cn = normalizeTribunalCaseNumber(t)
+    return cn ? { docType: '심판례', caseNumber: cn } : null
+  }
+  const cn = normalizeCaseNumber(t)
+  return cn ? { docType: '판례', caseNumber: cn } : null
 }
