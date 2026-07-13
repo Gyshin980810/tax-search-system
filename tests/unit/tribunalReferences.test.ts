@@ -85,6 +85,25 @@ function makePrecedent(caseNumber: string, articleTitle: string, decisionDate = 
   }
 }
 
+/** 국세청 해석례 코퍼스 픽스처 — 동일 caseNumber 중복 가능성을 externalId로 구분한다. */
+function makeNtsInterpretation(caseNumber: string, externalId: string, articleTitle: string): TaxLaw {
+  return {
+    sourceType: '해석례',
+    lawName: `국세청 ${caseNumber}`,
+    articleNumber: '',
+    articleTitle,
+    content: `세법해석례 원문 — ${articleTitle}`,
+    revisionDate: '2024-01-01',
+    enforcementDate: '',
+    sourceUrl: `https://taxlaw.nts.go.kr/qt/USEQTA002P.do?ntstDcmId=${externalId}`,
+    trustTier: 'T3',
+    caseNumber,
+    externalId,
+    issuingBody: '국세청',
+    decisionDate: '2024-01-01',
+  }
+}
+
 function makeEmbedStub(): IEmbeddingPort {
   return {
     embed: vi.fn(async () => [1, 0]),
@@ -213,5 +232,86 @@ describe('심판례 코퍼스 라이브 배선 (TAX-6B-18 [4])', () => {
     // sourceType이 identityKey에 포함되므로 사건번호가 같아도 서로 다른 자료로 취급된다
     const sourceTypes = result.references?.map((r) => r.sourceType) ?? []
     expect(sourceTypes.sort()).toEqual(['심판례', '판례'])
+  })
+})
+
+describe('국세청 세법해석례 코퍼스 라이브 배선 (TAX-6B-20-C)', () => {
+  it('유사도 바닥 이상 해석례를 참고 목록에 T3로 노출한다', async () => {
+    const { queryRewriter, searchPort, answerGenerator, verifier } = makeStubs([LAW_WITH_BODY], '가지급금')
+    const vectorPort = makeVectorStubBySourceType({
+      해석례: [{ item: makeNtsInterpretation('법인22601-2200', 'NTS-1', '가지급금 인정이자 계산'), similarity: 0.62 }],
+    })
+
+    const result = await generateAnswer(
+      queryRewriter, searchPort, answerGenerator, verifier,
+      '가지급금 인정이자 질문', MOCK_TEMPORAL, undefined, makeEmbedStub(), vectorPort,
+    )
+
+    expect(result.references?.map((r) => r.externalId)).toEqual(['NTS-1'])
+    expect(result.references?.[0].trustTier).toBe('T3')
+    expect(vectorPort.searchSimilar).toHaveBeenCalledWith(expect.any(Array), 5, '해석례')
+  })
+
+  it('유사도 바닥 미만 해석례는 제외한다', async () => {
+    const { queryRewriter, searchPort, answerGenerator, verifier } = makeStubs([LAW_WITH_BODY], '가지급금')
+    const vectorPort = makeVectorStubBySourceType({
+      해석례: [{ item: makeNtsInterpretation('법인22601-2200', 'NTS-1', '가지급금 인정이자 계산'), similarity: 0.4 }],
+    })
+
+    const result = await generateAnswer(
+      queryRewriter, searchPort, answerGenerator, verifier,
+      '가지급금 질문', MOCK_TEMPORAL, undefined, makeEmbedStub(), vectorPort,
+    )
+
+    expect(result.references).toEqual([])
+  })
+
+  it('실시간 결과와 같은 externalId의 벡터 해석례는 중복 노출하지 않는다', async () => {
+    const realtime = { ...makeNtsInterpretation('재산', 'NTS-1', '실시간 해석례'), content: '' }
+    const { queryRewriter, searchPort, answerGenerator, verifier } = makeStubs([LAW_WITH_BODY, realtime], '재산')
+    const vectorPort = makeVectorStubBySourceType({
+      해석례: [{ item: makeNtsInterpretation('재산', 'NTS-1', '벡터 해석례'), similarity: 0.8 }],
+    })
+
+    const result = await generateAnswer(
+      queryRewriter, searchPort, answerGenerator, verifier,
+      '재산 관련 질문', MOCK_TEMPORAL, undefined, makeEmbedStub(), vectorPort,
+    )
+
+    expect(result.references?.filter((r) => r.externalId === 'NTS-1')).toHaveLength(1)
+  })
+
+  it('caseNumber가 같아도 externalId가 다르면 서로 다른 해석례를 유지한다', async () => {
+    const realtime = { ...makeNtsInterpretation('재산', 'NTS-1', '실시간 해석례'), content: '' }
+    const { queryRewriter, searchPort, answerGenerator, verifier } = makeStubs([LAW_WITH_BODY, realtime], '재산')
+    const vectorPort = makeVectorStubBySourceType({
+      해석례: [{ item: makeNtsInterpretation('재산', 'NTS-2', '벡터 해석례'), similarity: 0.8 }],
+    })
+
+    const result = await generateAnswer(
+      queryRewriter, searchPort, answerGenerator, verifier,
+      '재산 관련 질문', MOCK_TEMPORAL, undefined, makeEmbedStub(), vectorPort,
+    )
+
+    expect(result.references?.filter((r) => r.sourceType === '해석례').map((r) => r.externalId).sort())
+      .toEqual(['NTS-1', 'NTS-2'])
+  })
+
+  it('해석례 벡터 검색 실패는 다른 참고 목록 경로에 영향을 주지 않는다', async () => {
+    const { queryRewriter, searchPort, answerGenerator, verifier } = makeStubs([LAW_WITH_BODY], '증여')
+    const vectorPort: IVectorSearchPort = {
+      searchSimilar: vi.fn(async (_vec: number[], _topK: number, sourceType?: string) => {
+        if (sourceType === '해석례') throw new Error('pgvector down')
+        if (sourceType === '판례') return [{ item: makePrecedent('prec1', '증여세부과처분취소'), similarity: 0.7 }]
+        return []
+      }),
+    }
+
+    const result = await generateAnswer(
+      queryRewriter, searchPort, answerGenerator, verifier,
+      '증여 질문', MOCK_TEMPORAL, undefined, makeEmbedStub(), vectorPort,
+    )
+
+    expect(result.references?.map((r) => r.caseNumber)).toEqual(['prec1'])
   })
 })

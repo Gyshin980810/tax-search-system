@@ -85,6 +85,11 @@
 | sourceType | `해석례` (expc와 동일 값, `issuingBody='국세청'`으로 구분) |
 | 저장 용량 | 심판례(~3GB)보다 작을 전망 — 해석례 본문은 수십~수백자 수준 |
 
+> ⚠️ **정정 주석 (2026-07-13, TAX-6B-20-D)**: 위 "해석례 본문은 수십~수백자 수준"이라는 전제는
+> 실측으로 뒤집혔다. TAX-6B-20-A 방안②(HWP 전문 결합) 채택 후 실측 평균은 **1,869자**, 최장은
+> **32,991자**다(TAX-6B-20-B §0.1·리포트). 이 전제 뒤집힘 때문에 20-B에서 `MAX_CONTENT_CHARS`를
+> 6,000자 → 30,000자로 상향했다. 원문은 역사 기록 보존을 위해 위 표 값을 그대로 둔다.
+
 ### 2.2 데이터 경로 (실호출 확정)
 
 ```
@@ -140,10 +145,10 @@
 
 ### 3.1 허용되는 변경 (단계별, §9 분할대로)
 
-- [ ] (20-A) `scripts/collectNtsInterpretations.ts` 신규 — 목록 전수(ntstDcmId 추출) → **taxlaw 크롤링** 본문 수집(resume) → finalize
-- [ ] (20-B) 임베딩 적재 — `embed.ts` 재사용(무변경), `embedQuality` 게이트 통과 후 pgvector 적재
-- [ ] (20-C) 검색 배선 — `generateAnswer.ts` `VECTOR_REFERENCE_GATES`에 `해석례` 엔트리 추가(타입 확장)
-- [ ] (20-D) 문서 정합 — SSOT/PRD/CLAUDE.md + TAX-6B-19의 "본문 API 없음" 기록 정정
+- [x] (20-A) `scripts/collectNtsInterpretations.ts` 신규 — 목록 전수(ntstDcmId 추출) → **taxlaw 크롤링** 본문 수집(resume) → finalize
+- [x] (20-B) 임베딩 적재 — `embed.ts` 재사용(무변경), `embedQuality` 게이트 통과 후 pgvector 적재 — 실제로는 `sanitizeDate` 등 국소 보강 후 135,907건 실적재 완료(2026-07-12)
+- [x] (20-C) 검색 배선 — `generateAnswer.ts` `VECTOR_REFERENCE_GATES`에 `해석례` 엔트리 추가(타입 확장)
+- [x] (20-D) 문서 정합 — SSOT/PRD/CLAUDE.md + TAX-6B-19의 "본문 API 없음" 기록 정정 (2026-07-13)
 
 ### 3.2 금지되는 변경
 
@@ -208,24 +213,24 @@
 ## 5. Acceptance Criteria (단계별)
 
 **20-A (수집기):**
-1. [ ] 목록 전수 페이징이 totalCnt(≈136,280)까지 안정 수집, `--list-only`로 연결·ntstDcmId 추출률 확인 가능
-2. [ ] 본문 크롤링에서 회신·요지(·필요 시 전문)가 §4.3 결정대로 회수됨, `hasSubstantiveTaxlawBody`로 빈본문 스킵, scrubOc로 키·URL 미노출
-3. [ ] resume(records.jsonl append) 동작 — 중단 후 재실행 시 미완료 ntstDcmId만 이어받음
-4. [ ] throttle·동시성 상한 적용(§7), finalize 시 `embedQuality` 게이트(caseNumber 중복·누락) 리포트
-5. [ ] 순수 함수(parseListPage·extractNtstDcmId·parseBody·mapToTaxLaw)에 vitest 단위 테스트 추가, 전건 그린
+1. [x] 목록 전수 페이징이 totalCnt(≈136,280)까지 안정 수집, `--list-only`로 연결·ntstDcmId 추출률 확인 가능
+2. [x] 본문 크롤링에서 회신·요지(·필요 시 전문)가 §4.3 결정대로 회수됨, `hasSubstantiveTaxlawBody`로 빈본문 스킵, scrubOc로 키·URL 미노출
+3. [x] resume(records.jsonl append) 동작 — 중단 후 재실행 시 미완료 ntstDcmId만 이어받음
+4. [x] throttle·동시성 상한 적용(§7), finalize 시 `embedQuality` 게이트(caseNumber 중복·누락) 리포트
+5. [x] 순수 함수(parseListPage·extractNtstDcmId·parseBody·mapToTaxLaw)에 vitest 단위 테스트 추가, 전건 그린
 
 **20-B (임베딩 적재):**
-6. [ ] `npm run embed -- --input scripts/ntsExpc_full.json` 무변경 실행, content 보유분만 적재
-7. [ ] pgvector에 `source_type='해석례'`(issuingBody='국세청') 행 적재 확인(smokeVector)
+6. [x] `npm run embed -- --input scripts/ntsExpc_full.json` 실행, content 보유분만 적재 — `sanitizeDate` 등 국소 보강 후 135,907건 실적재(2026-07-12)
+7. [x] pgvector에 `source_type='해석례'`(issuingBody='국세청') 행 적재 확인(smokeVector)
 
 **20-C (검색 배선):**
-8. [ ] `VECTOR_REFERENCE_GATES`에 `해석례` 엔트리 추가(타입 `'판례'|'심판례'` → `'판례'|'심판례'|'해석례'` 확장)
-9. [ ] 해석례 의미 검색이 참고 목록에 합류, 보수적 게이트(minSimilarity·max) 적용, 실패 시 조용히 폴백
-10. [ ] `npm run typecheck` 0에러, vitest 전건 통과, **P95 합격선(15s) 미회귀**(벡터 검색은 병렬·게이트 보호)
+8. [x] `VECTOR_REFERENCE_GATES`에 `해석례` 엔트리 추가(타입 `'판례'|'심판례'` → `'판례'|'심판례'|'해석례'` 확장)
+9. [x] 해석례 의미 검색이 참고 목록에 합류, 보수적 게이트(minSimilarity·max) 적용, 실패 시 조용히 폴백 — 라이브 검증 PASS(2026-07-12)
+10. [x] `npm run typecheck` 0에러, vitest 전건 통과 — **단, P95 합격선(15s)은 미달**(25.37s 실측, 주원인은 이 티켓과 무관한 기존 LLM tail, 회계사 결정으로 기록만 하고 종료. 상세 `docs/reports/TAX-6B-20-C_report.md`)
 
 **20-D (문서):**
-11. [ ] SSOT/PRD/CLAUDE.md에 국세청 해석례 본문 **크롤링 확보**·벡터 적재 정책 명문화(공식 API 봉쇄 경위 포함)
-12. [ ] TAX-6B-19 티켓·메모리의 "ntsCgmExpc 본문 API 없음" 기록을 "공식 API는 존재하나 운영키 권한 봉쇄 → 크롤링 확보"로 정정
+11. [x] SSOT/PRD/CLAUDE.md에 국세청 해석례 본문 **크롤링 확보**·벡터 적재 정책 명문화(공식 API 봉쇄 경위 포함) (2026-07-13)
+12. [x] TAX-6B-19 티켓·리포트·본 티켓 §2.1의 "본문 없음"류 기록을 정정 주석(원문 보존 방식)으로 정정 (2026-07-13)
 
 ---
 

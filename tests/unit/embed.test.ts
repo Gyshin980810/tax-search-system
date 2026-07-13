@@ -2,7 +2,18 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { iterateLaws, parseArrayLine, sha256, STREAM_THRESHOLD_BYTES, truncateContent, withRetry } from '../../scripts/embed'
+import {
+  BATCH_CHARACTER_BUDGET,
+  iterateLaws,
+  MAX_CONTENT_CHARS,
+  parseArrayLine,
+  sanitizeDate,
+  sha256,
+  shouldFlushBeforeAdding,
+  STREAM_THRESHOLD_BYTES,
+  truncateContent,
+  withRetry,
+} from '../../scripts/embed'
 import type { TaxLaw } from '@/domain/TaxLaw'
 
 const SAMPLE_LAW: TaxLaw = {
@@ -51,10 +62,32 @@ describe('truncateContent', () => {
   })
 
   it('MAX_CONTENT_CHARS 초과 본문은 잘라내고 말줄임표를 붙인다', () => {
-    const content = '가'.repeat(7000)
+    const content = '가'.repeat(MAX_CONTENT_CHARS + 1)
     const result = truncateContent(content)
     expect(result.endsWith('(…)')).toBe(true)
-    expect(result.length).toBe(6000 + '(…)'.length)
+    expect(result.length).toBe(MAX_CONTENT_CHARS + '(…)'.length)
+  })
+})
+
+describe('임베딩 배치 글자 수 예산', () => {
+  it('짧은 문서는 문서 수 상한 전까지 같은 배치에 유지한다', () => {
+    const batch = [{ ...SAMPLE_LAW, content: '가'.repeat(1_000) }]
+    const nextLaw = { ...SAMPLE_LAW, content: '나'.repeat(1_000) }
+
+    expect(shouldFlushBeforeAdding(batch, nextLaw)).toBe(false)
+  })
+
+  it('긴 문서를 추가해 글자 수 예산에 닿으면 먼저 flush한다', () => {
+    const batch = [{ ...SAMPLE_LAW, content: '가'.repeat(BATCH_CHARACTER_BUDGET - 30_000) }]
+    const nextLaw = { ...SAMPLE_LAW, content: '나'.repeat(30_000) }
+
+    expect(shouldFlushBeforeAdding(batch, nextLaw)).toBe(true)
+  })
+
+  it('첫 문서는 길어도 단독 배치로 수용한다', () => {
+    const nextLaw = { ...SAMPLE_LAW, content: '가'.repeat(MAX_CONTENT_CHARS) }
+
+    expect(shouldFlushBeforeAdding([], nextLaw)).toBe(false)
   })
 })
 
@@ -105,6 +138,38 @@ describe('iterateLaws', () => {
 
   it('기본 STREAM_THRESHOLD_BYTES는 약 0.5GiB이다', () => {
     expect(STREAM_THRESHOLD_BYTES).toBe(0.5 * 1024 * 1024 * 1024)
+  })
+})
+
+describe('sanitizeDate', () => {
+  it('정상 YYYY-MM-DD 값은 그대로 반환한다', () => {
+    expect(sanitizeDate('2026-01-15')).toBe('2026-01-15')
+  })
+
+  it('월이 00인 값(국세청 원본 "월/일 미상" 표기)은 null을 반환한다', () => {
+    expect(sanitizeDate('2009-00-00')).toBeNull()
+  })
+
+  it('일이 00인 값은 null을 반환한다', () => {
+    expect(sanitizeDate('2010-02-00')).toBeNull()
+  })
+
+  it('월이 12 초과면 null을 반환한다', () => {
+    expect(sanitizeDate('2020-13-01')).toBeNull()
+  })
+
+  it('일이 31 초과면 null을 반환한다', () => {
+    expect(sanitizeDate('2020-01-32')).toBeNull()
+  })
+
+  it('빈 문자열·undefined는 null을 반환한다', () => {
+    expect(sanitizeDate('')).toBeNull()
+    expect(sanitizeDate(undefined)).toBeNull()
+  })
+
+  it('YYYY-MM-DD 형식이 아니면 null을 반환한다', () => {
+    expect(sanitizeDate('2026/01/15')).toBeNull()
+    expect(sanitizeDate('현행')).toBeNull()
   })
 })
 
