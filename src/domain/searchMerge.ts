@@ -12,13 +12,13 @@ import type { TaxLaw } from './TaxLaw'
 
 /**
  * 자료 식별 키 — 검색 결과 병합·중복 제거의 단일 기준.
- * 법령=법령명+조문번호 / 비법령=자료유형+사건번호.
+ * 법령=법령명+조문번호 / 비법령=자료유형+externalId 우선, 사건번호 폴백.
  * FallbackSearchPort의 벡터 병합(TAX-026-F)과 같은 기준을 공유해 중복 정책을 일원화한다.
  */
 export function identityKey(t: TaxLaw): string {
   return t.sourceType === '법령'
     ? `법령|${t.lawName}|${t.articleNumber}`
-    : `${t.sourceType}|${t.caseNumber ?? ''}`
+    : `${t.sourceType}|${t.externalId?.trim() || (t.caseNumber ?? '')}`
 }
 
 /**

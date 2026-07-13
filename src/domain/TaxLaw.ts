@@ -49,4 +49,12 @@ export interface TaxLaw {
   issuingBody?: string
   /** 선고일 / 결정일 / 회신일 (YYYY-MM-DD) */
   decisionDate?: string
+  /**
+   * 원본 시스템의 고유 문서 ID(caseNumber와 별개, TAX-6B-20-A 실증 2026-07-10).
+   * 2004년 이전 국세청 세법해석례는 caseNumber(안건번호) 필드에 세목명만 채워진 경우가 있어
+   * 서로 다른 문서가 같은 caseNumber를 공유할 수 있다(예: "재산" 82건) — caseNumber는
+   * 이 경우 식별자 역할을 못 한다. externalId(예: ntstDcmId)는 문서마다 항상 고유하므로
+   * caseNumber가 신뢰 불가할 때 실제 동일성 판단의 근거로 쓴다.
+   */
+  externalId?: string
 }

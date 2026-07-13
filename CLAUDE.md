@@ -8,6 +8,7 @@
 >
 > 갱신: 2026-06-08 — §9 8번 보강(승인 요청 시 선택지 장단점 한 줄 설명 의무화, 메모리 feedback_explain_before_decision.md와 정합)
 > 갱신: 2026-07-06 — §9 9번·§10·§11 보강(ROADMAP.md §3 갱신을 리포트와 동시 필수화, `scripts/check-roadmap-sync.js` 훅 신설, PRD.md는 `/sync-docs` 스킬로 주기적 일괄 정합 — TAX-6B-9~37 장기 미반영 사고 재발 방지)
+> 갱신: 2026-07-13 — §7.1 VOYAGE_API_KEY 용도에 국세청 해석례 벡터 적재 반영(TAX-6B-20-B/D)
 
 ---
 
@@ -173,7 +174,7 @@ UI (app/)  →  API Route (app/api/)  →  Usecase (src/usecases/)  →  Adapter
 |---|---|---|
 | `NATIONAL_TAX_API_KEY` | 국세법령정보시스템 API | M1 |
 | `OPENAI_API_KEY` | GPT-4o-mini (쿼리 변환·답변 생성) | M2 (TAX-011-B) |
-| `VOYAGE_API_KEY` | voyage-4 임베딩 (의미 검색·판례/심판례 벡터 적재) | M6B (TAX-6B-15) |
+| `VOYAGE_API_KEY` | voyage-4 임베딩 (의미 검색·판례/심판례/국세청 해석례 벡터 적재) | M6B (TAX-6B-15), 해석례는 TAX-6B-20-B |
 | `DATABASE_URL` | pgvector 벡터 DB (Postgres + pgvector, Neon·Supabase·Vercel Postgres) | M4 (TAX-026-B) |
 
 ---

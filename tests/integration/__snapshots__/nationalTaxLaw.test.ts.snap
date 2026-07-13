@@ -8,6 +8,7 @@ exports[`NationalTaxLawAdapter 통합 테스트 (MSW) > TAX-018 안전망 — �
   "content": "",
   "decisionDate": "2024-08-05",
   "enforcementDate": "",
+  "externalId": "010000000000100201",
   "issuingBody": "국세청",
   "lawName": "국세청 법인22601-2200",
   "revisionDate": "2024-08-05",

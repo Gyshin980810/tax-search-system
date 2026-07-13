@@ -89,3 +89,7 @@ scripts/precedent/
 scripts/precedent_full/
 scripts/citation_edges.json
 scripts/tribunal_citation_source.jsonl
+
+# 국세청 세법해석례 본문 수집 산출물 (대용량, 적재용 중간 산출물 — git 미커밋) (TAX-6B-20-A)
+scripts/ntsExpc_full.json
+scripts/ntsExpc/

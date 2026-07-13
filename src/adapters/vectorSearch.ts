@@ -3,7 +3,7 @@ import { Pool } from 'pg'
 import type { IVectorSearchPort, VectorMatch } from '../ports/vectorSearchPort'
 import type { TaxLaw, SourceType, TrustTier } from '../domain/TaxLaw'
 
-interface DbRow {
+export interface DbRow {
   source_type: string
   law_name: string
   article_number: string | null
@@ -18,6 +18,7 @@ interface DbRow {
   trust_tier: string
   issuing_body: string | null
   decision_date: string | Date | null
+  external_id: string | null
   similarity: number
 }
 
@@ -28,7 +29,7 @@ function toIsoDateString(value: string | Date | null): string {
   return value
 }
 
-function rowToTaxLaw(row: DbRow): TaxLaw {
+export function rowToTaxLaw(row: DbRow): TaxLaw {
   const decisionDate = toIsoDateString(row.decision_date)
   return {
     sourceType: row.source_type as SourceType,
@@ -43,6 +44,7 @@ function rowToTaxLaw(row: DbRow): TaxLaw {
     ...(row.case_number  ? { caseNumber:  row.case_number }  : {}),
     ...(row.issuing_body ? { issuingBody: row.issuing_body } : {}),
     ...(decisionDate     ? { decisionDate }                  : {}),
+    ...(row.external_id  ? { externalId: row.external_id }   : {}),
   }
 }
 
@@ -66,7 +68,7 @@ export class PgVectorSearchAdapter implements IVectorSearchPort {
     const { rows } = await this.pool.query<DbRow>(
       `SELECT source_type, law_name, article_number, case_number, article_title,
               content, revision_date, enforcement_date, source_url,
-              trust_tier, issuing_body, decision_date,
+              trust_tier, issuing_body, decision_date, metadata->>'externalId' AS external_id,
               1 - (embedding <=> $1::vector) AS similarity
        FROM taxlaw_embeddings
        WHERE content != '' ${sourceFilter}

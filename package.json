@@ -35,6 +35,7 @@
     "convert:precedent": "tsx scripts/convertPrecedentMd.ts",
     "collect:tribunal": "node --env-file=.env.local --conditions=react-server --import tsx scripts/collectTribunal.ts",
     "collect:precedent": "node --env-file=.env.local --conditions=react-server --import tsx scripts/collectPrecedent.ts",
+    "collect:nts-interp": "node --env-file=.env.local --conditions=react-server --import tsx scripts/collectNtsInterpretations.ts",
     "probe:precedent": "node --env-file=.env.local --conditions=react-server --import tsx scripts/precedentRelevanceProbe.ts"
   },
   "dependencies": {
