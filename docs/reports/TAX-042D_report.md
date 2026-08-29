@@ -99,7 +99,7 @@
 
 | 명령 | 결과 |
 |---|---|
-| `npm run lint` | PASS (사전 무관 warning 1건만: `ImpactMapPanel.test.tsx beforeEach` 미사용) |
+| `npm run lint` | PASS (사전 무관 warning 1건만: `beforeEach` 미사용) |
 | `npx tsc --noEmit` | 본 티켓 무관 사전 회귀 3건(`tests/integration/llmAnswerGeneratorRetry.test.ts:128-130` `NoObjectGeneratedError` strict, Task #72로 분리) |
 | `npx vitest run` | **346/346 PASS** (D-1 +4 단위, D-2 +1 Usecase 음성 단언) |
 

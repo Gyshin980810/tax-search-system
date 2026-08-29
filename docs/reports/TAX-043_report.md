@@ -59,7 +59,7 @@
 | 항목 | 결과 |
 |---|---|
 | `npm run typecheck` | ✅ EXIT 0 |
-| `npm run lint` (전체) | ✅ 0 errors (warning 1건은 기존 ImpactMapPanel.test.tsx — 본 티켓 무관) |
+| `npm run lint` (전체) | ✅ 0 errors (warning 1건은 기존 테스트 — 본 티켓 무관) |
 | 신규 파일 lint 단독 | ✅ 0 errors 0 warnings |
 | vitest 전체 | ✅ **367/367 PASS** (기존 346 + 신규 21) |
 | 신규 단위 테스트 21건 | ✅ PASS |

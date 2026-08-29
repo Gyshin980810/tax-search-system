@@ -52,7 +52,7 @@
 
 | 검증 단계 | 결과 |
 |---|---|
-| `npm run lint` | ✅ PASS (0 errors, 1 warning — 본 티켓 무관, `ImpactMapPanel.test.tsx`의 사전 unused import) |
+| `npm run lint` | ✅ PASS (0 errors, 1 warning — 본 티켓 무관한 사전 unused import) |
 | `npm run typecheck` | ⚠️ 본 티켓 변경분 0건 통과. **사전 결함 1건 잔존**: `scripts/perf/measureP95.ts:223` `TemporalContext.requestedAt` 누락 (본 티켓 무관, 별도 티켓 분리 권고) |
 | `npm run test` (전체) | ✅ **275/275 PASS** (Test Files 14 passed, Duration 6.45s) |
 | `npm run build` | ⚠️ Next.js 컴파일 PASS (4.0s) + Type check 단계에서 위 사전 결함으로 실패. 본 티켓 변경분 무관. |

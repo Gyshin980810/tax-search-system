@@ -7,7 +7,7 @@
 >
 > 문서 위계: `SSOT.md`(헌법) > `PRD.md`(사양서) > `CLAUDE.md`(행동 요약) > 티켓
 >
-> 작성일: 2026-04-24 (v1.0) / 갱신: 2026-05-04 (v2.0) / 2026-05-14 (v2.1) / 2026-05-22 (v2.2) / 2026-05-25 (v2.3) / 2026-06-05 (v2.4) / 2026-06-05 (v2.5) / 2026-06-16 (v2.6) / 2026-06-21 (v2.7) / 2026-06-22 (v2.8) / 2026-07-13 (v2.9)
+> 작성일: 2026-04-24 (v1.0) / 갱신: 2026-05-04 (v2.0) / 2026-05-14 (v2.1) / 2026-05-22 (v2.2) / 2026-06-05 (v2.4) / 2026-06-05 (v2.5) / 2026-06-16 (v2.6) / 2026-06-21 (v2.7) / 2026-06-22 (v2.8) / 2026-07-13 (v2.9)
 > 버전: 2.9
 
 ---
@@ -62,10 +62,10 @@
 |---|---|---|
 | `app/` | UI 페이지, API Route | Next.js App Router |
 | `app/api/` | HTTP 진입점 | Usecase 호출만, 비즈니스 로직 금지 |
-| `src/domain/` | 엔티티·값 객체 | TaxLaw, SearchQuery, LabeledAnswer, VerificationResult, TemporalContext, Citation, **ImpactMap·ImpactNode·ImpactEdge** (TAX-033), relatedLawParser·mermaid (TAX-033), **OpsQueryLog·OpsFeedback·contentVerify** (TAX-030/6B-9, 운영 환류 — FR-23/24/25) |
-| `src/usecases/` | 애플리케이션 로직 | RAG 5단계 오케스트레이션, **buildImpactMap** (TAX-033) |
+| `src/domain/` | 엔티티·값 객체 | TaxLaw, SearchQuery, LabeledAnswer, VerificationResult, TemporalContext, Citation, **OpsQueryLog·OpsFeedback·contentVerify** (TAX-030/6B-9, 운영 환류 — FR-23/24/25) |
+| `src/usecases/` | 애플리케이션 로직 | RAG 5단계 오케스트레이션 |
 | `src/adapters/` | 외부 시스템 연동 | nationalTaxLaw·localTaxLaw·llmQueryRewriter·llmAnswerGenerator·lawVerifier, **opsLog** (Pg/Null, fail-soft — TAX-030-A) |
-| `src/ports/` | 인터페이스 정의 | 어댑터 교체 가능 (Port·Adapter 패턴), **IImpactMapPort** (TAX-033), **IOpsLogPort** (TAX-030-A) |
+| `src/ports/` | 인터페이스 정의 | 어댑터 교체 가능 (Port·Adapter 패턴), **IOpsLogPort** (TAX-030-A) |
 | `src/config.ts` | 환경변수 검증 | Fail-fast 구현 (§5.3) |
 | `.claude/agents/` | Claude Code 서브에이전트 | `law-verifier.md` (TAX-003에서 작성) |
 | `docs/` | 문서 허브 | SSOT, PRD, 티켓, 리포트 |
@@ -500,8 +500,6 @@ for (const key of required) {
 - 시점 검색 (FR-15, P1)
 - 부칙·경과조치 자동 연결 (FR-17, P1)
 - 골든셋 회귀 자동화 (FR-18, P1)
-- **심판례 관계 그래프 코어 (FR-21, P1 ✅ 완료 — TAX-033)** — `/api/impact-map` API, 관련법령·참조결정 원문 명시 연계
-- **심판례 카드 관계 그래프 UI (FR-22, P1 ✅ 완료 — TAX-034)** — mermaid `graph LR` 토글 패널
 - 최근 검색어 기록 (FR-11, P2 — 조기 진입 가능)
 - 즐겨찾기·북마크 (FR-12, P2)
 - PDF·노트 내보내기 (FR-13, P3)
@@ -611,7 +609,6 @@ for (const key of required) {
 | 2026-05-04 | 2.0 | **정확성 중심 대규모 개정.** §0 핵심 원칙 신설("정확성 > 완전성 > 속도 > 편의성"), §3.3 RAG 5단계 파이프라인 신설, §3.4 아키텍처 예외 규정 신설, §4.1 환경변수 4곳 동시 갱신 의무화, §4.4 LLM 프롬프트 변경 시 골든셋 회귀 강제, §5.3 Fail-fast 패턴 한국어 주석 보강, §7.1 인용 무결성 강화(문자 단위 일치), §7.2 출처·시점 필드 강제 + 시점 라벨 의무, §7.4 law-verifier V1~V6 신설, §7.5 라벨링 시스템 신설(⚫ 폐지 추가), §7.6 Trust Tier T1~T4 신설, §7.7 결정론성·정렬 기준 고정 신설, §7.8 개인정보 처리 강화(E-PII-DETECTED), §8.2 금지 사항 4개 신설, §10.3 DOD에 law-verifier·골든셋 추가, §11.1 MVP 재정의, §13 골든셋 작성 규칙 신설, §14 법적 면책 표준 문구 신설 | Claude + 회계사 |
 | 2026-05-14 | 2.1 | **테스트 인프라 규범화 + 골든셋 부담 완화 정합 갱신.** §2 디렉토리 책임에 `tests/unit/`·`tests/integration/`·`tests/e2e/`·`.github/workflows/` 추가(M1 진입 직전 Vitest·CI 도입 의무, M3 진입 시 Playwright 도입 의무). §10.3 DOD에 린트·타입체크·단위·통합·UI E2E 테스트 통과 항목 추가. §13.1 G-1 직접 근거 골든셋 50건 → 30건 하향(회계사 1인 작성 부담 완화, PRD §15.1.1·ROADMAP §6.2와 정합). | Claude + 회계사 |
 | 2026-05-22 | 2.2 | **비법령 직접검색 트랙(TAX-015~016) 정합 — TAX-017 1단계.** §7.6 Trust Tier 표 T3에 법령해석례·**조세심판원 결정례(심판례)** 명문 추가(회계사 결정 2026-05-22, T3) + 각주. §7.2 필드 강제 표에 `sourceType`(법령/판례/해석례/심판례)·비법령 식별자(`caseNumber`)·생산기관(`issuingBody`)·결정·선고·회신일(`decisionDate`) 추가. §7.4 V1 통과 조건에 자료유형별 식별자 분기(법령=조문번호 / 비법령=`caseNumber`, 레거시=법령 간주) 명시 + **참고 목록(`references`)은 V1~V6 비대상·citation 승격 금지** 규칙 신설. §3.3 RAG [2]단계에 비법령 직접검색(판례·해석례·심판원 결정례) 포함 명시. 코드 변경 없음(문서 정합 전용). 다음: PRD(2단계)·CLAUDE.md(3단계) 정합. | Claude + 회계사 |
-| 2026-05-25 | 2.3 | **심판례 관계 그래프(Impact Map) 정합 — TAX-035.** §2 디렉토리 책임에 `src/domain/` ImpactMap·ImpactNode·ImpactEdge·relatedLawParser·mermaid, `src/usecases/` buildImpactMap, `src/ports/` IImpactMapPort 추가(TAX-033). §11.2 차기 목록에 FR-21(심판례 관계 그래프 코어 ✅ 완료)·FR-22(심판례 카드 UI ✅ 완료) 추가. 코드 변경 없음(문서 정합 전용). | Claude + 회계사 |
 | 2026-06-05 | 2.4 | **비법령 V4 시점 라벨 사양 정합 — TAX-037.** §7.2 시점 라벨 목록에 `[결정: YYYY.MM.DD]`(비법령 결정·선고·회신일용) 추가 + 결정일 불명 시 `[현행]` 허용 안내. `lawVerifier.ts` V4 정규식에 `[결정: ...]` 패턴 추가(코드 변경). `buildNonlawCases.ts` `buildTemporalLabel()` 임시 처리 제거. 골든셋 비법령 4건 `[현행]` → `[결정: YYYY.MM.DD]` 갱신. PRD §6.4.1·CLAUDE.md §6.2 동일 정합. | Claude + 회계사 |
 | 2026-06-05 | 2.5 | **비법령 어댑터 매핑 회귀 방지 — TAX-039.** §7.2에 비법령 자료 어댑터 매핑 표 신설(외부 API 필드 → 도메인 `caseNumber`·`issuingBody`·`decisionDate`·`articleTitle`·`content`·`sourceType` 정규화 규칙). 매핑 누락 시 V4 폴백으로 결정일 맥락이 손실됨을 명시. `tests/integration/nationalTaxLaw.test.ts`에 4트랙(판례·법제처해석례·국세청해석·심판례) `decisionDate` 정규식 회귀 단언 추가(어댑터 코드 무변경). | Claude + 회계사 |
 | 2026-06-16 | 2.6 | **Phase 7(운영 데이터 환류) 정식 기능 정합 — 회계사 결정 3건 반영.** §2 디렉토리 책임 표에 `src/domain/` OpsQueryLog·OpsFeedback·contentVerify(FR-23/24/25), `src/adapters/` opsLog(Pg/Null, fail-soft, TAX-030-A), `src/ports/` IOpsLogPort 추가. §7.8 개인정보 처리에 운영 로그 적재 규칙 신설(저장 직전 마스킹 적용·`query_norm` 마스킹만·식별자 컬럼 미존재·fail-soft·정답 자동생성 금지). §13.2에 내용 검증기용 `expectedContent`(mustInclude/mustExclude, 회계사 작성) 필드 + V1~V6 완전 분리·CI 편입 규칙 신설. 회계사 결정 3건: ①운영 데이터 저장소=기존 Neon Postgres 재사용(파일 저장은 Vercel 서버리스 휘발로 폐기, 신규 환경변수 없음) ②수집 범위=성공 쿼리 포함 전부 ③내용 검증기=방안 A(규칙 기반). PRD v2.5·ROADMAP v2.5와 동기. 코드 변경 없음(문서 정합 전용). | Claude + 회계사 |

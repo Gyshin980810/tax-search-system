@@ -46,7 +46,7 @@
 
 | 명령 | 결과 |
 |---|---|
-| `npm run lint` | PASS (사전 무관 warning 1건만: `ImpactMapPanel.test.tsx beforeEach` 미사용) |
+| `npm run lint` | PASS (사전 무관 warning 1건만: `beforeEach` 미사용) |
 | `npx tsc --noEmit` | PASS (EXIT=0) |
 | `npx vitest run` | **341/341 PASS** (기존 335 + 단위 19 + 통합 6 - 회귀 수정으로 인한 변동 0건, 회귀 0건) |
 | `npm run build` | PASS (Next.js 16.2.6 Turbopack, 4.5s) |

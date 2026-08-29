@@ -3,8 +3,6 @@
  *
  * - 부칙·경과조치 배지 표시 (6B-2)
  * - 즐겨찾기 토글 (6B-4)
- *
- * ImpactMapPanel은 mermaid 의존(jsdom 불가) → mock으로 대체.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -13,11 +11,6 @@ import { AnswerCard } from '../../app/components/AnswerCard'
 import type { LabeledAnswer } from '../../src/domain/LabeledAnswer'
 import type { TaxLaw } from '../../src/domain/TaxLaw'
 import type { Citation } from '../../src/domain/Citation'
-
-// ImpactMapPanel은 mermaid를 import → jsdom에서 동작 불가하므로 mock
-vi.mock('../../app/components/ImpactMapPanel', () => ({
-  ImpactMapPanel: () => null,
-}))
 
 // ── fixture 헬퍼 ──────────────────────────────────────────────────────────────
 

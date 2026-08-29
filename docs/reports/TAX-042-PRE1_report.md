@@ -48,7 +48,7 @@ Vercel AI SDK v6의 `LanguageModelUsage` 타입이 `inputTokenDetails`·`outputT
 
 | 검증 단계 | 결과 |
 |---|---|
-| `npm run lint` | ✅ PASS (0 errors, 1 warning — `ImpactMapPanel.test.tsx` 사전 unused import, 본 티켓 무관) |
+| `npm run lint` | ✅ PASS (0 errors, 1 warning — 사전 unused import, 본 티켓 무관) |
 | `npm run typecheck` | ✅ **PASS (0 errors)** — 사전 결함 모두 해소 |
 | `npm run test` (전체) | ✅ **275/275 PASS** (Test Files 14, Duration 6.27s) |
 | `npm run build` | ✅ **PASS** — Compiled 4.2s + TypeScript 3.5s + Static 3/3 + 라우트 5개 정상 빌드 |
