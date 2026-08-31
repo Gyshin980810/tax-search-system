@@ -209,6 +209,21 @@ cp .env.example .env.local
 | Git | 2.53.0 | `git --version` |
 | Claude Code | 최신 | `npm i -g @anthropic-ai/claude-code` |
 
+**git 커밋 신원 설정** — 이걸 빠뜨리면 클론·수정까지는 되는데
+**첫 `git commit`에서 `Author identity unknown`으로 막힌다.** 설치 직후 함께 해두는 게 좋다.
+
+```bash
+git config --global user.name  "Gyshin980810"
+git config --global user.email "sfamily_one@naver.com"
+
+# 확인 (둘 다 값이 나와야 한다)
+git config --get user.name
+git config --get user.email
+```
+
+> 기존 커밋과 **같은 이메일**을 써야 GitHub에서 같은 사람의 기여로 집계된다.
+> 이 저장소에서만 다르게 쓰려면 `--global` 없이 저장소 안에서 실행한다.
+
 ### 3.4 프로젝트 폴더 안의 "git에 없는" 설정들
 
 `.gitignore`가 제외하는 파일 중 **설정에 해당하는 것**들이다.
