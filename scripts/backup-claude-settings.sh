@@ -48,8 +48,26 @@ if [ -d "$SRC/projects" ]; then
   done
 fi
 
+# [4] 프로젝트 안의 gitignore된 설정 파일
+#     클론해도 안 따라오지만 시크릿은 아닌 것들만 담는다.
+#     .env.local(API 키)·.auth/(세션 쿠키)는 의도적으로 제외한다
+PROJ_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+mkdir -p "$DEST/project-local"
+
+for item in .mcp.json AGENTS.md .codex .agents; do
+  if [ -e "$PROJ_ROOT/$item" ]; then
+    cp -r "$PROJ_ROOT/$item" "$DEST/project-local/"
+    echo "  [프로젝트] $item"
+  fi
+done
+
 echo "----------------------------------------"
 echo "완료. 총 용량: $(du -sh "$DEST" | cut -f1)"
+echo ""
+echo "⚠️  이 백업에 포함되지 않은 것 (직접 챙길 것):"
+echo "    - .env.local        API 키 6개. USB나 비밀번호 관리자로 별도 이동"
+echo "    - ~/.claude/.credentials.json  로그인 토큰. 새 PC에서 /login 재실행"
+echo "    - mcp-shrimp-task-manager/     저장소 밖 서드파티 도구(WorkSpace 폴더)"
 echo ""
 echo "이 폴더를 USB·클라우드로 새 컴퓨터에 옮기고,"
 echo "docs/SETUP_NEW_MACHINE.md 의 복원 절차를 따르세요."

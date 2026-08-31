@@ -12,11 +12,16 @@
 | 구분 | 어디에 있나 | 새 PC에서 얻는 법 |
 |---|---|---|
 | **① 저장소에 들어있는 것** | `.claude/agents/`, `.claude/skills/`, `.claude/settings.json`, `docs/` | `git clone` 하면 **자동으로 딸려온다** |
-| **② 내 컴퓨터에만 있는 것** | `~/.claude/` (전역 지침·메모리·단축키) | **수동 복사 필요** (§2) |
-| **③ 절대 복사하면 안 되는 것** | `.env.local`(API 키), `~/.claude/.credentials.json`(로그인 토큰) | 새로 발급·재로그인 (§3) |
+| **② 내 컴퓨터에만 있는 것** | `~/.claude/` (전역 지침·메모리·단축키) + 프로젝트 안의 gitignore된 설정(`.mcp.json`, `.codex/` 등) | **수동 복사 필요** (§2, §3.4) |
+| **③ 절대 복사하면 안 되는 것** | `.env.local`(API 키), `~/.claude/.credentials.json`(로그인 토큰), `.auth/`(세션 쿠키) | 새로 발급·재로그인 (§3) |
 
 > 비유하자면 — ①은 이삿짐 트럭에 이미 실려 있고, ②는 손가방에 따로 챙겨야 하고,
 > ③은 새 집에서 새로 만들어야 하는 열쇠다.
+
+> ⚠️ **가장 흔한 착각**: "`.claude/` 폴더는 통째로 gitignore된다"고 생각하기 쉽지만
+> 이 저장소는 **반대다.** 프로젝트 `.claude/`는 대부분 커밋되어 있고(에이전트 14·스킬 6·권한 설정),
+> 예외적으로 `settings.local.json` 하나만 제외된다.
+> 반면 **홈 폴더의 `~/.claude/`는 통째로 git 밖**이다. 이 둘을 헷갈리지 말 것.
 
 ---
 
@@ -30,15 +35,16 @@ cd ~/WorkSpace
 git clone https://github.com/Gyshin980810/tax-search-system.git
 cd tax-search-system
 
-# 3) 작업 중인 브랜치 목록 확인
-git branch -a
+# 3) 최신 상태 확인 — 모든 작업이 master에 병합되어 있다
+git log --oneline -5
 
-# 4) LR 티켓 정비 브랜치로 이동 (2026-08-30 기준 최신 작업)
-git checkout docs/lr-ticket-revision
-
-# 5) 의존성 설치
+# 4) 의존성 설치
 npm install
 ```
+
+> 📌 **브랜치 안내 (2026-08-31 갱신)**: 이전 판에는 `git checkout docs/lr-ticket-revision`이
+> 적혀 있었으나, 그 브랜치는 **master에 병합 후 삭제**되었다. 별도 checkout 없이
+> `master` 그대로 쓰면 된다.
 
 이 시점에 **이미 들어와 있는 것들**:
 
@@ -168,14 +174,21 @@ cp .env.example .env.local
 # 그 다음 편집기로 열어 값을 채운다
 ```
 
-필요한 키 4개 (`CLAUDE.md` §7.1 기준):
+필요한 키는 **6개**다. `CLAUDE.md` §7.1에는 4개만 적혀 있으나,
+실제 코드(`proxy.ts`, `app/api/auth/login/route.ts`)는 베타 게이트용 2개를 더 요구한다.
 
-| 환경변수 | 용도 | 어디서 얻나 |
-|---|---|---|
-| `NATIONAL_TAX_API_KEY` | 국세법령정보시스템 API | 기존 PC의 `.env.local`에서 복사하거나 재발급 |
-| `OPENAI_API_KEY` | GPT-4o-mini (쿼리 변환·답변 생성) | platform.openai.com |
-| `VOYAGE_API_KEY` | voyage-4 임베딩 (의미 검색) | voyageai.com |
-| `DATABASE_URL` | Neon pgvector (판례·심판례·해석례 28만건) | Neon 대시보드 |
+| 환경변수 | 용도 | 어디서 얻나 | 없으면 |
+|---|---|---|---|
+| `NATIONAL_TAX_API_KEY` | 국세법령정보시스템 API | 기존 PC의 `.env.local`에서 복사하거나 재발급 | 검색 전멸 |
+| `OPENAI_API_KEY` | GPT-4o-mini (쿼리 변환·답변 생성) | platform.openai.com | 답변 생성 불가 |
+| `VOYAGE_API_KEY` | voyage-4 임베딩 (의미 검색) | voyageai.com | 벡터 검색 불가 |
+| `DATABASE_URL` | Neon pgvector (판례·심판례·해석례 28만건) | Neon 대시보드 | 벡터 검색 불가 |
+| `BETA_ACCESS_CODE` | 베타 공유 패스코드 (TAX-056) | 기존 PC 값 그대로 | 로그인 화면 통과 불가 |
+| `SESSION_SECRET` | 세션 쿠키 HMAC 서명 키 (TAX-056) | 기존 PC 값 그대로 | **앱 자체가 뜨지 않음** |
+
+> `SESSION_SECRET`을 빠뜨리는 실수가 잦다. `proxy.ts`가 이 값으로 세션 쿠키를 서명하므로,
+> 없으면 `npm run dev`가 되더라도 화면 진입이 막힌다.
+> 기존 PC와 **같은 값**을 써야 기존에 발급된 쿠키가 유지된다(다르게 하면 재로그인만 하면 됨).
 
 > 💡 **DATABASE_URL이 중요하다.** 벡터 DB는 클라우드(Neon)에 있으므로
 > 이 값만 맞으면 새 PC에서도 28만건 코퍼스를 **그대로** 쓸 수 있다.
@@ -191,6 +204,50 @@ cp .env.example .env.local
 | npm | 11.11.0 | `npm -v` |
 | Git | 2.53.0 | `git --version` |
 | Claude Code | 최신 | `npm i -g @anthropic-ai/claude-code` |
+
+### 3.4 프로젝트 폴더 안의 "git에 없는" 설정들
+
+`.gitignore`가 제외하는 파일 중 **설정에 해당하는 것**들이다.
+클론만 해서는 안 따라오므로 직접 옮기거나 다시 만들어야 한다.
+
+| 항목 | 정체 | 조치 |
+|---|---|---|
+| `.env.local` | API 키 6개 | **직접 옮기기** (USB·비밀번호 관리자) |
+| `.mcp.json` | MCP 서버 설정 (shrimp·sequential-thinking) | **옮긴 뒤 경로 수정** — §3.5 |
+| `.codex/` | Codex 앱용 에이전트 4·훅 설정 (29KB) | **옮기기** (코드 리뷰 하네스에 필요) |
+| `AGENTS.md` | Codex용 프로젝트 지침 (12KB) | **옮기기** |
+| `.agents/skills/` | Codex용 스킬 사본 (36KB) | **옮기기** |
+| `.claude/settings.local.json` | 개인 권한 예외 | **옮기지 말 것** — 아래 참고 |
+| `.auth/user.json` | Playwright 로그인 세션 쿠키 | **옮기지 말 것** — 테스트 실행 시 자동 재생성 |
+| `.vercel/`, `.next/`, `node_modules/` | 빌드·배포 캐시 | **옮기지 말 것** — 자동 생성 |
+
+> ⚠️ **`.claude/settings.local.json`은 이미 낡았다.**
+> 안의 MCP 경로가 `C:/work/mcp-shrimp-task-manager/...`를 가리키는데
+> **그 폴더는 현재 PC에 존재하지 않는다**(과거 경로의 잔재).
+> 유효한 설정은 `.mcp.json` 쪽이므로, 이 파일은 옮기지 말고 새 PC에서 필요할 때 새로 만든다.
+
+> 💡 `.codex/`·`AGENTS.md`·`.agents/`는 **Codex 앱에게 코드 수정을 시킬 때** 쓰는 설정이다
+> (`/harness-review` 하네스의 "작성자" 역할). Codex를 계속 쓸 계획이면 반드시 챙긴다.
+> 시크릿은 들어있지 않은 걸 확인했다.
+
+### 3.5 절대 경로 3곳 고치기 — 계정명이 다르면 필수
+
+설정 파일 안에 `C:/Users/sfami/...`가 **하드코딩**되어 있다.
+새 PC의 윈도우 계정명이 다르면 그대로는 작동하지 않는다.
+
+| 파일 | 줄 | 고칠 내용 |
+|---|---|---|
+| `~/.claude/settings.json` | `statusLine.command` | `bash /c/Users/sfami/.claude/statusline-command.sh` → 새 계정명 |
+| `.mcp.json` | `args`, `env.DATA_DIR` | `C:/Users/sfami/WorkSpace/mcp-shrimp-task-manager/...` → 새 경로 |
+| `.codex/config.toml` | `args`, `env.DATA_DIR` | 위와 동일 |
+
+> ⚠️ **MCP는 저장소 밖 폴더에 의존한다.**
+> `mcp-shrimp-task-manager/`는 서드파티 도구라 `.gitignore`에 있고 이 저장소에 없다.
+> 실제 위치는 `C:\Users\sfami\WorkSpace\mcp-shrimp-task-manager` — **WorkSpace 폴더째 옮기거나**
+> 새 PC에서 해당 저장소를 다시 클론·빌드해야 shrimp 작업관리 MCP가 살아난다.
+> 작업 데이터는 `C:\Users\sfami\WorkSpace\shrimp_data`에 따로 있다.
+>
+> 귀찮으면 **MCP 없이 시작해도 된다** — 세법 검색 시스템 본체 기능과는 무관하다.
 
 ---
 
@@ -220,6 +277,8 @@ Claude Code 쪽 확인:
 - [ ] 이전 메모리를 기억하는가 — "지금까지 뭐 하고 있었지?" 물어보면
       LR 트랙·사례 중심 전환을 알고 있어야 한다
 - [ ] `/tax-search` 등 프로젝트 스킬이 목록에 뜨는가
+- [ ] 상태줄이 뜨는가 (안 뜨면 §3.5 절대경로 미수정)
+- [ ] `/mcp`에 shrimp·sequential-thinking이 보이는가 (선택 — 없어도 본체는 정상)
 
 ---
 
@@ -232,6 +291,10 @@ Claude Code 쪽 확인:
 | `npm run smoke:vector` 실패 | `DATABASE_URL` 없음·오타 | `.env.local` 확인. Neon 대시보드에서 연결 문자열 재복사 |
 | 영어로 대답한다 | 전역 `settings.json` 미복사 | §2.3 재실행 |
 | 응답이 느리거나 모델이 다르다 | `settings.json`의 `model`·`effortLevel` 미반영 | 파일 복사 후 Claude Code 재시작 |
+| `npm run dev`는 되는데 화면 진입이 막힌다 | `SESSION_SECRET`·`BETA_ACCESS_CODE` 누락 | §3.2 표의 6개를 모두 채웠는지 확인 |
+| 상태줄이 안 뜬다 | `statusLine.command`의 계정명이 옛 PC 것 | §3.5 표 1행 수정 |
+| `/mcp`가 비어 있다 | `mcp-shrimp-task-manager`가 새 PC에 없음 | §3.5 하단 — 폴더 이동 또는 MCP 없이 진행 |
+| Codex 하네스가 지침을 모른다 | `.codex/`·`AGENTS.md` 미복사 | §3.4 표대로 이동 |
 
 ---
 
