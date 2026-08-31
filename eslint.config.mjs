@@ -21,6 +21,20 @@ const eslintConfig = defineConfig([
     "scripts/**",
     "node_modules/**",
   ]),
+  // 언더스코어(_) 접두사는 "의도적으로 사용하지 않음"을 뜻하는 프로젝트 관례다.
+  // 포트 인터페이스를 구현하는 no-op 어댑터처럼 인자를 지울 수 없는 경우에 쓴다.
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

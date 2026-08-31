@@ -112,17 +112,21 @@ cp -r "$BACKUP/output-styles/." ~/.claude/output-styles/
 메모리 폴더 이름은 **프로젝트 경로를 그대로 인코딩**한 것이다.
 
 ```
-C--Users-sfami-WorkSpace-tax-search-system
- ↑ 이건 C:\Users\sfami\WorkSpace\tax-search-system 를 뜻한다
-   (콜론·역슬래시를 하이픈으로 바꾼 형태)
+C--Users-sfami-OneDrive-Desktop-----
+ ↑ 이건 C:\Users\sfami\OneDrive\Desktop\새 폴더 를 뜻한다 (이 PC의 현재 경로)
+   (콜론·역슬래시는 물론 한글·공백도 하이픈 하나씩으로 바뀐 형태)
 ```
+
+> ⚠️ **한글·공백 폴더명 주의**: 위 예시의 꼬리 하이픈 5개는 `\새 폴더`가 뭉개진 것이다
+> (구분자 1개 + `새`·공백·`폴`·`더` 4자). 한글 경로를 쓰면 폴더 이름만 보고
+> 어느 프로젝트인지 사람이 알아볼 수 없다. **새 PC는 영문 경로를 권장한다.**
 
 따라서 새 PC의 **윈도우 계정명이나 폴더 위치가 다르면 이름이 달라진다.**
 
-| 새 PC 프로젝트 경로 | 폴더 이름 |
+| 프로젝트 경로 | 폴더 이름 |
 |---|---|
-| `C:\Users\sfami\WorkSpace\tax-search-system` | `C--Users-sfami-WorkSpace-tax-search-system` (동일 — 그대로 복사) |
-| `C:\Users\gyuho\WorkSpace\tax-search-system` | `C--Users-gyuho-WorkSpace-tax-search-system` (**이름 변경 필요**) |
+| `C:\Users\sfami\OneDrive\Desktop\새 폴더` | `C--Users-sfami-OneDrive-Desktop-----` (이 PC — 그대로 복사) |
+| `C:\Users\sfami\WorkSpace\tax-search-system` | `C--Users-sfami-WorkSpace-tax-search-system` (**이름 변경 필요**) |
 | `D:\dev\tax-search-system` | `D--dev-tax-search-system` (**이름 변경 필요**) |
 
 **경로가 같은 경우** (권장 — 새 PC도 같은 계정명·같은 위치로 맞추면 가장 편하다):
@@ -141,7 +145,7 @@ ls ~/.claude/projects/
 # 2) 백업의 memory 폴더 내용만 새 이름 폴더로 복사
 NEW=~/.claude/projects/<자동생성된_새_폴더명>
 mkdir -p "$NEW/memory"
-cp -r "$BACKUP/projects/C--Users-sfami-WorkSpace-tax-search-system/memory/." "$NEW/memory/"
+cp -r "$BACKUP/projects/C--Users-sfami-OneDrive-Desktop-----/memory/." "$NEW/memory/"
 ```
 
 복원 확인:
@@ -287,7 +291,7 @@ Claude Code 쪽 확인:
 | 증상 | 원인 | 해결 |
 |---|---|---|
 | Claude가 이전 작업을 전혀 모른다 | 메모리 폴더 이름이 경로와 안 맞음 | §2.4 재확인. `ls ~/.claude/projects/`로 실제 생성된 이름 확인 |
-| 스킬·에이전트가 안 보인다 | 프로젝트 루트가 아닌 곳에서 실행 | `cd tax-search-system` 후 `claude` 실행 |
+| 스킬·에이전트가 안 보인다 | 프로젝트 루트가 아닌 곳에서 실행 | 저장소 루트로 `cd` 후 `claude` 실행 |
 | `npm run smoke:vector` 실패 | `DATABASE_URL` 없음·오타 | `.env.local` 확인. Neon 대시보드에서 연결 문자열 재복사 |
 | 영어로 대답한다 | 전역 `settings.json` 미복사 | §2.3 재실행 |
 | 응답이 느리거나 모델이 다르다 | `settings.json`의 `model`·`effortLevel` 미반영 | 파일 복사 후 Claude Code 재시작 |

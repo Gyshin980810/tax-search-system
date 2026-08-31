@@ -9,7 +9,19 @@
 set -euo pipefail
 
 SRC="$HOME/.claude"
-DEST="${1:-$HOME/Desktop/claude-settings-backup}"
+
+# 바탕화면 위치 자동 탐지
+#  OneDrive로 바탕화면을 동기화하는 PC는 ~/Desktop이 아예 없고 ~/OneDrive/Desktop이 진짜다.
+#  이걸 구분하지 않으면 눈에 안 보이는 새 폴더에 백업이 만들어진다.
+if [ -d "$HOME/Desktop" ]; then
+  DEFAULT_DEST="$HOME/Desktop/claude-settings-backup"
+elif [ -d "$HOME/OneDrive/Desktop" ]; then
+  DEFAULT_DEST="$HOME/OneDrive/Desktop/claude-settings-backup"
+else
+  DEFAULT_DEST="$HOME/claude-settings-backup"
+fi
+
+DEST="${1:-$DEFAULT_DEST}"
 
 echo "백업 대상: $SRC"
 echo "저장 위치: $DEST"

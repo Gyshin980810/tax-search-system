@@ -36,6 +36,9 @@ export function SearchBar({ onSubmit, loading }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    // localStorage는 서버 렌더링 시 존재하지 않으므로 마운트 후 동기화가 의도된 설계다.
+    // useState 지연 초기화로 옮기면 서버·클라이언트 결과가 달라져 하이드레이션 불일치가 난다.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRecentQueries(loadRecent())
   }, [])
 

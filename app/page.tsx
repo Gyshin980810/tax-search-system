@@ -84,7 +84,7 @@ export default function Home() {
         >
           <p className="text-sm font-semibold text-amber-800">시점 확인 필요</p>
           <p className="text-sm text-amber-700">
-            질문에 과거 시점 표현이 감지되었습니다. 위 '시점 지정'에서 기준 날짜를 선택하거나,
+            질문에 과거 시점 표현이 감지되었습니다. 위 &apos;시점 지정&apos;에서 기준 날짜를 선택하거나,
             질문에 구체적인 연도(예: 2020년)를 명시해 주세요.
           </p>
         </div>

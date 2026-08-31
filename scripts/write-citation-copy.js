@@ -1,4 +1,9 @@
 const fs = require('fs')
+const path = require('path')
+
+// 저장소 위치가 바뀌어도 동작하도록 스크립트 기준 상대경로로 해석한다
+// (옛 절대경로 C:/Users/sfami/WorkSpace/... 는 죽은 경로였음)
+const OUT = path.join(__dirname, '..', 'app', 'components', 'CitationCopy.tsx')
 const content = [
   "'use client'",
   "import { useState } from 'react'",
@@ -38,7 +43,7 @@ const content = [
 ].join('\n')
 
 fs.writeFileSync(
-  'C:/Users/sfami/WorkSpace/tax-search-system/app/components/CitationCopy.tsx',
+  OUT,
   content,
   'utf8',
 )
